@@ -9,10 +9,8 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.6.0/css/fontawesome.min.css" integrity="sha384-NvKbDTEnL+A8F/AA5Tc5kmMLSJHUO868P+lDtTpJIeQdGYaUIuLr4lVGOEA1OcMy" crossorigin="anonymous">
 
     <style type="text/css">
-        /* Подключаем шрифты Google */
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
 
-        /* Общие стили */
         body {
             font-family: 'Roboto', sans-serif;
             background-color: #f5f5f5;
@@ -61,12 +59,16 @@
         .panel {
             border: none;
             border-radius: 8px;
-            box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
+            box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.2);
             margin-bottom: 20px;
         }
 
+        .panel-default {
+            margin-top: 50px; /* Увеличенный отступ перед панелью */
+        }
+
         .panel-heading {
-            background-color: #6200ea;
+            background-color: #410299;
             color: white;
             padding: 15px;
             border-top-left-radius: 8px;
@@ -80,6 +82,19 @@
             background: white;
             border-bottom-left-radius: 8px;
             border-bottom-right-radius: 8px;
+        }
+
+        .panel-body, .container {
+            word-wrap: break-word; /* Перенос длинных слов */
+            overflow-wrap: break-word;
+            white-space: normal; /* Обычный перенос строк */
+        }
+
+        pre, code {
+            white-space: pre-wrap; /* Перенос строк в блоках кода */
+            word-break: break-word;
+            overflow-x: auto; /* Добавление прокрутки при необходимости */
+            max-width: 100%;
         }
 
         /* Таблицы */
@@ -96,7 +111,7 @@
         }
 
         table th {
-            background-color: #6200ea;
+            background-color: #410299;
             color: white;
             font-weight: 500;
         }
@@ -120,7 +135,7 @@
         .button {
             display: inline-block;
             padding: 10px 20px;
-            background-color: #6200ea;
+            background-color: #410299;
             color: white;
             text-decoration: none;
             border-radius: 4px;
@@ -136,9 +151,39 @@
         h6 {
             font-size: 16px;
             font-weight: 500;
-            border-bottom: 2px solid #6200ea;
+            border-bottom: 2px solid #410299;
             padding-bottom: 5px;
             margin-top: 20px;
+        }
+
+        pre {
+            overflow-x: auto;
+            padding: 10px;
+            background: #f5f5f5; /* Легкий фон для читабельности */
+            border-radius: 5px;
+        }
+
+        .graph {
+            height: 250px;
+            width: 418px;
+        }
+
+        .graph-2x {
+            height: 250px;
+            width: 898px;
+        }
+
+        .report_findings_severity {
+            margin-top: 100px;
+            font-size: 25px;
+        }
+
+        .report_findings_entry {
+            font-size: 20px;
+        }
+
+        .finding-title {
+            background-color: #6200ea;
         }
     </style>
 </head>
