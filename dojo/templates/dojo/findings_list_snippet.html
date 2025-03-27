@@ -392,6 +392,15 @@
                                     <th scope="col"> 
                                         {% trans "Planned Remediation" %}
                                     </th>
+                                    <th scope="col">
+                                        {% trans "Mitigation" %}
+                                    </th>
+                                    <th scope="col">
+                                        {% trans "Description" %}
+                                    </th>
+                                    <th scope="col">
+                                        {% trans "endpoints" %}
+                                    </th>
                                     {% if filter_name != 'Closed' %}
                                         <th scope="col">
                                             {% trans "Reviewers" %}
@@ -802,6 +811,9 @@
                 {% endif %}
                 { "data": "service" },
                 { "data": "planned_remediation_date" },
+                { "data": "mitigation"},
+                { "data": "description"},
+                { "data": "endpoints"},
                 {% if filter_name != 'Closed' %}
                     { "data": "reviewers" },
                 {% endif %}
