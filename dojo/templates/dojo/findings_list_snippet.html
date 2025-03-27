@@ -732,7 +732,17 @@
                                         </td>
 
                                         <td>
-                                            {% if finding.endpoints %}{{ finding.endpoints }}{% endif %}
+                                            {% if finding|has_endpoints %}
+                                                {% with endpoints=finding|get_vulnerable_endpoints %}
+                                                    {% if endpoints %}
+                                                        <ul>
+                                                            {% for endpoint in endpoints %}
+                                                                <li>{{ endpoint }}</li>
+                                                            {% endfor %}
+                                                        </ul>
+                                                    {% endif %}
+                                                {% endwith %}
+                                            {% endif %}
                                         </td>
 
 
