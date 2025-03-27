@@ -949,7 +949,14 @@
                             pageSize: 'LETTER'
                         }),
                         $.extend( true, {}, buttonCommon, {
-                            extend: 'print'
+                            extend: 'print',
+                            exportOptions: {
+                                columns: ':visible:not(.noVis)',
+                                stripHtml: true,
+                                stripNewlines: true,
+                                trim: true,
+                                orthogonal: 'export'
+                            }
                         }),
                     ],
                 });
