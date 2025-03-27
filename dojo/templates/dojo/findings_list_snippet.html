@@ -401,6 +401,9 @@
                                     <th scope="col">
                                         {% trans "Endpoints" %}
                                     </th>
+                                    <th scope="col">
+                                        {% trans "File Path" %}
+                                    </th>
                                     {% if filter_name != 'Closed' %}
                                         <th scope="col">
                                             {% trans "Reviewers" %}
@@ -732,6 +735,10 @@
                                         </td>
 
                                         <td>
+                                            {% if finding.file_path %}{{ finding.file_path }}{% endif %}
+                                        </td>
+
+                                        <td>
                                             {% if finding|has_endpoints %}
                                                 {% with endpoints=finding|get_vulnerable_endpoints %}
                                                     {% if endpoints %}
@@ -840,6 +847,7 @@
                 { "data": "mitigation"},
                 { "data": "description"},
                 { "data": "endpoints"},
+                { "data": "file_path"},
                 {% if filter_name != 'Closed' %}
                     { "data": "reviewers" },
                 {% endif %}
