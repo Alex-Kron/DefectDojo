@@ -735,10 +735,6 @@
                                         </td>
 
                                         <td>
-                                            {% if finding.file_path %}{{ finding.file_path }}{% endif %}
-                                        </td>
-
-                                        <td>
                                             {% if finding|has_endpoints %}
                                                 {% with endpoints=finding|get_vulnerable_endpoints %}
                                                     {% if endpoints %}
@@ -752,7 +748,9 @@
                                             {% endif %}
                                         </td>
 
-
+                                        <td>
+                                            {% if finding.file_path %}{{ finding.file_path }}{% endif %}
+                                        </td>
 
                                         {% if filter_name != 'Closed' %}
                                             <td class="nowrap">
