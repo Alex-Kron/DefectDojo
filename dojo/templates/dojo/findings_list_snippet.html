@@ -399,7 +399,7 @@
                                         {% trans "Description" %}
                                     </th>
                                     <th scope="col">
-                                        {% trans "endpoints" %}
+                                        {% trans "Endpoints" %}
                                     </th>
                                     {% if filter_name != 'Closed' %}
                                         <th scope="col">
@@ -721,6 +721,22 @@
                                         <td class="nowrap">
                                             {% if finding.planned_remediation_date %}{{ finding.planned_remediation_date }}{% endif %}
                                         </td>
+
+
+                                        <td>
+                                            {% if finding.mitigation %}{{ finding.mitigation }}{% endif %}
+                                        </td>
+
+                                        <td>
+                                            {% if finding.description %}{{ finding.mitigation }}{% endif %}
+                                        </td>
+
+                                        <td>
+                                            {% if finding.get_endpoints %}{{ finding.get_endpoints }}{% endif %}
+                                        </td>
+
+
+
                                         {% if filter_name != 'Closed' %}
                                             <td class="nowrap">
                                                 {% if finding.reviewers %}
