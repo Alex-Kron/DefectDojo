@@ -82,7 +82,7 @@
                                 <th style="text-align: left;padding: 4px;vertical-align: top;border: 1px solid #DDDDDD;">Security Tool</th>
                             {% endif %}
 
-                            {% if finding.engagement_id %}
+                            {% if finding.test %}
                                 <th style="text-align: left;padding: 4px;vertical-align: top;border: 1px solid #DDDDDD;">Service</th>
                             {% endif %}
 
@@ -101,7 +101,7 @@
                                 <td style="text-align: left;padding: 4px;vertical-align: top;border: 1px solid #DDDDDD;">{{ finding.service }}</td>
                             {% endif %}
 
-                            {% if finding.engagement_id %}
+                            {% if finding.test %}
                                 <th style="text-align: left;padding: 4px;vertical-align: top;border: 1px solid #DDDDDD;">{{ finding.test.engagement.name }}</th>
                             {% endif %}
 
