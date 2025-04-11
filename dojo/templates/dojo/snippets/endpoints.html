@@ -78,12 +78,16 @@
                     </div>
                     <table class="table-striped table table table-condensed table-hover finding-endpoints">
                         <tr>
-                            {% if finding.service %}
-                                <th style="text-align: left;padding: 4px;vertical-align: top;border: 1px solid #DDDDDD;">Security Tool</th>
+                            {% if finding.test %}
+                                <th style="text-align: left;padding: 4px;vertical-align: top;border: 1px solid #DDDDDD;">Service</th>
                             {% endif %}
 
                             {% if finding.test %}
-                                <th style="text-align: left;padding: 4px;vertical-align: top;border: 1px solid #DDDDDD;">Service</th>
+                                <th style="text-align: left;padding: 4px;vertical-align: top;border: 1px solid #DDDDDD;">Version</th>
+                            {% endif %}
+
+                            {% if finding.service %}
+                                <th style="text-align: left;padding: 4px;vertical-align: top;border: 1px solid #DDDDDD;">Security Tool</th>
                             {% endif %}
 
                             {% if finding.component_name %}
@@ -97,12 +101,16 @@
                             {% endif %}
                         </tr>
                         <tr>
-                            {% if finding.service %}
-                                <td style="text-align: left;padding: 4px;vertical-align: top;border: 1px solid #DDDDDD;">{{ finding.service }}</td>
+                            {% if finding.test %}
+                                <td style="text-align: left;padding: 4px;vertical-align: top;border: 1px solid #DDDDDD;">{{ finding.test.engagement.name }}</td>
                             {% endif %}
 
                             {% if finding.test %}
-                                <th style="text-align: left;padding: 4px;vertical-align: top;border: 1px solid #DDDDDD;">{{ finding.test.engagement.name }}</th>
+                                <td style="text-align: left;padding: 4px;vertical-align: top;border: 1px solid #DDDDDD;">{{ finding.test.title }}</td>
+                            {% endif %}
+
+                            {% if finding.service %}
+                                <th style="text-align: left;padding: 4px;vertical-align: top;border: 1px solid #DDDDDD;">{{ finding.service }}</th>
                             {% endif %}
 
                             {% if finding.component_name %}
