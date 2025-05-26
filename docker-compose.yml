@@ -11,6 +11,8 @@ services:
     build:
       context: ./
       dockerfile: "Dockerfile.nginx-${DEFECT_DOJO_OS:-debian}"
+      tags:
+        - dd_nginx
     image: "defectdojo/defectdojo-nginx:${NGINX_VERSION:-latest}"
     depends_on:
       - uwsgi
@@ -29,11 +31,14 @@ services:
         published: ${DD_TLS_PORT:-8443}
         protocol: tcp
         mode: host
+
   uwsgi:
     build:
       context: ./
       dockerfile: "Dockerfile.django-${DEFECT_DOJO_OS:-debian}"
       target: django
+      tags:
+        - dd_uwsgi
     image: "defectdojo/defectdojo-django:${DJANGO_VERSION:-latest}"
     depends_on:
       - postgres
