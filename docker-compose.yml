@@ -31,6 +31,7 @@ services:
         published: ${DD_TLS_PORT:-8443}
         protocol: tcp
         mode: host
+    restart: unless-stopped
 
   uwsgi:
     build:
@@ -57,6 +58,8 @@ services:
           source: ./docker/extra_settings
           target: /app/docker/extra_settings
         - "defectdojo_media:${DD_MEDIA_ROOT:-/app/media}"
+    restart: unless-stopped
+
   celerybeat:
     image: "defectdojo/defectdojo-django:${DJANGO_VERSION:-latest}"
     depends_on:
@@ -73,6 +76,8 @@ services:
         - type: bind
           source: ./docker/extra_settings
           target: /app/docker/extra_settings
+    restart: unless-stopped
+
   celeryworker:
     image: "defectdojo/defectdojo-django:${DJANGO_VERSION:-latest}"
     depends_on:
@@ -90,6 +95,8 @@ services:
           source: ./docker/extra_settings
           target: /app/docker/extra_settings
         - "defectdojo_media:${DD_MEDIA_ROOT:-/app/media}"
+    restart: unless-stopped
+
   initializer:
     image: "defectdojo/defectdojo-django:${DJANGO_VERSION:-latest}"
     depends_on:
@@ -117,11 +124,13 @@ services:
       POSTGRES_PASSWORD: ${DD_DATABASE_PASSWORD:-defectdojo}
     volumes:
       - defectdojo_postgres:/var/lib/postgresql/data
+    restart: unless-stopped
   redis:
     # Pinning to this version due to licensing constraints
     image: redis:7.2.5-alpine@sha256:6aaf3f5e6bc8a592fbfe2cccf19eb36d27c39d12dab4f4b01556b7449e7b1f44
     volumes:
       - defectdojo_redis:/data
+    restart: unless-stopped
 volumes:
   defectdojo_postgres: {}
   defectdojo_media: {}
