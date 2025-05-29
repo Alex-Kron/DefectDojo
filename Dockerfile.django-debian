@@ -64,6 +64,7 @@ RUN \
     libxslt1-dev \
     shared-mime-info \
     fonts-dejavu-core \
+    libpangoft2-1.0-0 \
     && \
   apt-get clean && \
   rm -rf /var/lib/apt/lists && \
