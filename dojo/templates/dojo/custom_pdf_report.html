@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ report_name }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+
+        body {
+            font-family: "DejaVu Sans", Arial, sans-serif;
+            background-color: #f8f9fa;
+            color: #212529;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1, h2, h3, h4, h5 {
+            font-weight: 500;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        .container {
+            width: 90%;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 6px;
+            box-shadow: 0 0 4px rgba(0,0,0,0.1);
+        }
+
+        .panel {
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            background-color: #ffffff;
+        }
+
+        .panel-heading {
+            background-color: #410299;
+            color: white;
+            padding: 12px 16px;
+            font-size: 16px;
+            font-weight: 500;
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+        }
+
+        .panel-body {
+            padding: 16px;
+        }
+
+        .alert {
+            padding: 15px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+        }
+
+        .alert-warning {
+            color: #856404;
+            background-color: #fff3cd;
+            border-color: #ffeeba;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+
+        table th, table td {
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            text-align: left;
+        }
+
+        table th {
+            background-color: #410299;
+            color: white;
+        }
+
+        .widget {
+            margin-bottom: 40px;
+            page-break-inside: avoid;
+        }
+
+        .severity {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+        }
+
+        .severity-Info { background-color: #17a2b8; }
+        .severity-Low { background-color: #28a745; }
+        .severity-Medium { background-color: #ffc107; color: #212529; }
+        .severity-High { background-color: #fd7e14; }
+        .severity-Critical { background-color: #dc3545; }
+
+        .disclaimer {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Custom PDF Report</h1>
+
+    {% if include_disclaimer %}
+        <div class="alert alert-warning disclaimer">
+            <strong>Disclaimer:</strong><br>
+            {{ disclaimer|safe }}
+        </div>
+    {% endif %}
+
+    {% for widget in widgets %}
+        <div class="widget">
+            {{ widget.rendered|safe }}
+        </div>
+    {% endfor %}
+</div>
+
+</body>
+</html>
+
