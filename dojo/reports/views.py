@@ -14,6 +14,7 @@ from django.views import View
 from openpyxl import Workbook
 from openpyxl.styles import Font
 from weasyprint import HTML
+from django.template.loader import render_to_string
 
 from dojo.authorization.authorization import user_has_permission_or_403
 from dojo.authorization.authorization_decorators import user_is_authorized
