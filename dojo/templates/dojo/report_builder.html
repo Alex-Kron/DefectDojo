@@ -186,6 +186,54 @@
 
             event.preventDefault();
         }
+
+        function runPdfReport(event) {
+            var valid = true;
+
+            $('.in-use-widgets .form-control').not('#finding-list .form-control')
+                .not('#endpoint-list .form-control').not('#wysiwyg-content .form-control')
+                .not('.bs-searchbox .form-control').not('div').each(function () {
+                if ($(this).val() === '')
+                    valid = false;
+            });
+
+            if (valid) {
+                var result = [];
+                $('.in-use-widgets form').each(function () {
+                    var _form = $(this);
+
+                    $(this).find('.editor').each(function () {
+                        _form.find('input[name="hidden_content"]').attr('value', $(this).html().replace( /(<br>|\s|<div><br><\/div>|&nbsp;)*$/, ""));
+                    });
+
+                    var sr = $(this).serializeArray();
+
+                    var y = {};
+                    y[this.id] = sr;
+                    result.push(y);
+                });
+
+                var json_content = JSON.stringify(result);
+
+                // ⚠️ Ключевая разница: отправка на другой URL или добавление флага
+                $('form#custom_report textarea#json').val(json_content);
+
+                // Установим скрытый флаг, что нужно PDF
+                $('<input>').attr({
+                    type: 'hidden',
+                    name: 'pdf',
+                    value: 'true'
+                }).appendTo('form#custom_report');
+
+                $('form#custom_report').removeClass('hidden').submit();
+            }
+            else {
+                alert('Please complete all forms.')
+            }
+
+            event.preventDefault();
+        }
+
         {% block report_functions %}
         {% endblock %}
         $(function () {
@@ -351,6 +399,7 @@
             });
 
             $('a.run_report').on('click', runReport);
+            $('.run_pdf_report').on('click', runPdfReport);
         });
     </script>
 {% endblock %}
