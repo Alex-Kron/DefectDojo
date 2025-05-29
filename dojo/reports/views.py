@@ -120,11 +120,20 @@ class ReportBuilder(View):
 
 class CustomReport(View):
     def post(self, request: HttpRequest) -> HttpResponse:
-        # saving the report
         form = self.get_form(request)
         if form.is_valid():
             self._set_state(request)
+
+            if request.POST.get("pdf") == "true":
+                html_string = render_to_string("dojo/report_pdf_template.html", self.get_context())
+                pdf_file = HTML(string=html_string).write_pdf()
+
+                response = HttpResponse(pdf_file, content_type="application/pdf")
+                response["Content-Disposition"] = "attachment; filename=custom_report.pdf"
+                return response
+
             return render(request, self.get_template(), self.get_context())
+
         raise PermissionDenied
 
     def _set_state(self, request: HttpRequest):
