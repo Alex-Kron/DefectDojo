@@ -86,6 +86,7 @@
 
             if ($('.in-use-widgets ul#sortable2 li').length > 0) {
                 $('a.run_report').removeClass('disabled');
+                $('a.run_pdf_report').removeClass('disabled');
             }
         }
 
@@ -269,9 +270,11 @@
 
                     if ($('.in-use-widgets ul#sortable2 li').length > 0) {
                         $('a.run_report').removeClass('disabled');
+                        $('a.run_pdf_report').removeClass('disabled');
                     }
                     else {
                         $('a.run_report').addClass('disabled');
+                        $('a.run_pdf_report').addClass('disabled');
                     }
                 },
                 receive: function(event, ui) {
@@ -286,9 +289,11 @@
 
                     if ($('.in-use-widgets ul#sortable2 li').length > 0) {
                         $('a.run_report').removeClass('disabled');
+                        $('a.run_pdf_report').removeClass('disabled');
                     }
                     else {
                         $('a.run_report').addClass('disabled');
+                        $('a.run_pdf_report').addClass('disabled');
                     }
 
                     if (ui.item.attr('class') === 'wysiwyg-content') {
