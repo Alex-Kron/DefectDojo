@@ -128,16 +128,10 @@ class CustomReport(View):
             self._set_state(request)
 
             if request.POST.get("pdf") == "true":
-                template = loader.get_template("dojo/custom_pdf_report.html")
                 context = self.get_context()
-                context["widgets"] = [
-                    {"rendered": w.get_rendered(request=request)}
-                    for w in context["widgets"]
-                    if hasattr(w, "get_rendered")
-                ]
-                html_string = template.render(context, request)
+                template = loader.get_template("dojo/custom_pdf_report.html")
+                html_string = template.render(context, request=request)
                 pdf_file = HTML(string=html_string).write_pdf()
-
                 response = HttpResponse(pdf_file, content_type="application/pdf")
                 response["Content-Disposition"] = "attachment; filename=custom_report.pdf"
                 return response
