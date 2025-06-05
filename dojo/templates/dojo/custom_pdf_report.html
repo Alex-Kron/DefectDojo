@@ -6,31 +6,28 @@
         @page {
           size: A4;
           margin: 20mm 15mm 20mm 15mm;
+
+          @top-center {
+            content: element(header);
+          }
         }
 
-        body {
-          font-family: 'Montserrat', sans-serif;
-          color: black;
-          background: white;
-          margin: 0;
-          padding: 0;
-        }
-
-        /* Шапка */
+        /* Объявляем header как элемент для колонтитула */
         .report-header {
+          position: running(header);
           background-color: #0050C6;
           color: white;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 10px 15px;
+          padding: 5mm 10mm;
           font-size: 10pt;
-          /* Фиксированная высота */
-          height: 60px;
+          height: 50px;
           box-sizing: border-box;
+          width: 100%;
         }
 
-        /* Левая колонка с контактами */
+        /* Контактная инфа слева */
         .report-header .left-col {
           display: flex;
           flex-direction: column;
@@ -40,38 +37,19 @@
           font-size: 9pt;
         }
 
-        /* Правая колонка — логотип */
+        /* Логотип справа */
         .report-header .right-col img {
           height: 40px;
           width: auto;
         }
 
-        /* Титульная страница */
-        .cover_page {
-          padding-top: 80px; /* Отступ, чтобы не залезло под шапку */
-          background-color: white;
-          min-height: 270mm; /* Высота страницы A4 minus поля и шапка */
-          text-align: center;
-        }
-
-        .cover_page #heading {
-          font-size: 32pt;
-          margin-bottom: 10mm;
-        }
-
-        .cover_page #sub_heading {
-          font-size: 18pt;
-          margin-bottom: 5mm;
-        }
-
-        .cover_page #meta_info {
-          font-size: 14pt;
-          margin-bottom: 10mm;
-          font-weight: 600;
-        }
-
-        .cover_page p {
-          font-size: 10pt;
+        /* Чтобы основной контент не перекрывал колонтитул */
+        body {
+          font-family: 'Montserrat', sans-serif;
+          margin: 0;
+          padding-top: 60px; /* Отступ, чтобы не наезжать на header */
+          background: white;
+          color: black;
         }
     </style>
 
