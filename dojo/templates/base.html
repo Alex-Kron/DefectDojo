@@ -109,9 +109,9 @@
                             <span class="icon-bar"></span>
                             <span class="icon-bar"></span>
                         </button>
-                        <a class="navbar-brand" href="{% url 'home' %}">
+                        <a class="navbar-brand" href="{% url 'home' %}" style="display: flex; align-items: center; height: 50px;">
                         {% block header_logo %}
-                            <div style="padding: 10px;">
+                            <div style="padding: 10px; height: 100%; display: flex; align-items: center;">
                                 <img src="{% static "dojo/img/logo.png" %}" alt="DefectDojo Logo" style="height: 100%; width: auto; object-fit: contain;"/>
                             </div>
                         {% endblock %}
