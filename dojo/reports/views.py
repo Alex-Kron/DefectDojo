@@ -52,6 +52,9 @@ from dojo.utils import (
     get_words_for_field,
 )
 
+logging.getLogger("weasyprint").setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
+
 logger = logging.getLogger(__name__)
 
 EXCEL_CHAR_LIMIT = 32767
@@ -131,6 +134,11 @@ class CustomReport(View):
                 context = self.get_context()
                 template = loader.get_template("dojo/custom_pdf_report.html")
                 html_string = template.render(context, request=request)
+
+                #TODO отладочное сохранение
+                with open("/tmp/weasy_debug.html", "w", encoding="utf-8") as f:
+                    f.write(html_string)
+
                 pdf_file = HTML(string=html_string).write_pdf()
                 response = HttpResponse(pdf_file, content_type="application/pdf")
                 response["Content-Disposition"] = "attachment; filename=custom_report.pdf"
