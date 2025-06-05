@@ -121,7 +121,7 @@
 
     {% for widget in widgets %}
         <div class="widget">
-            {{ widget.rendered|safe }}
+             {{ widget.get_html }}
         </div>
     {% endfor %}
 </div>
