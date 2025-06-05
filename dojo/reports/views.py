@@ -11,6 +11,7 @@ from django.http import Http404, HttpRequest, HttpResponse, QueryDict
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views import View
+from django.template import loader
 from openpyxl import Workbook
 from openpyxl.styles import Font
 from weasyprint import HTML
