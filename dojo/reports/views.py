@@ -128,8 +128,13 @@ class CustomReport(View):
 
             if request.POST.get("pdf") == "true":
                 context = self.get_context()
-                context["widgets"] = [widget.render() for widget in context["widgets"]]
-                html_string = render_to_string("dojo/custom_pdf_report.html", self.get_context())
+                context["widgets"] = [
+                    {"rendered": w.get_rendered(request=request)}
+                    for w in context["widgets"]
+                    if hasattr(w, "get_rendered")
+                ]
+
+                html_string = render_to_string("dojo/custom_pdf_report.html", context)
                 pdf_file = HTML(string=html_string).write_pdf()
 
                 response = HttpResponse(pdf_file, content_type="application/pdf")
