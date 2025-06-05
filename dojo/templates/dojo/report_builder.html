@@ -23,7 +23,7 @@
                 </div>
                 <div class="panel-footer">
                     <div class="clearfix">
-                        <a class="btn btn-success disabled pull-right run_report" href="#">Run</a>
+                        <a class="btn btn-success disabled pull-right run_report" href="#">Run HTML</a>
                         <a class="btn btn-success disabled pull-right run_pdf_report" style="margin-right: 10px;" href="#">Run PDF</a>
                     </div>
                 </div>
@@ -178,6 +178,12 @@
                 var json_content = JSON.stringify(result);
 
                 $('form#custom_report textarea#json').val(json_content);
+
+                $('<input>').attr({
+                    type: 'hidden',
+                    name: 'pdf',
+                    value: 'false'
+                }).appendTo('form#custom_report');
 
                 $('form#custom_report').removeClass('hidden').submit();
             }
