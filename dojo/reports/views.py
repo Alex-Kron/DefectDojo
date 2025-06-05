@@ -127,6 +127,7 @@ class CustomReport(View):
             self._set_state(request)
 
             if request.POST.get("pdf") == "true":
+                print(self.get_context())
                 html_string = render_to_string("dojo/custom_pdf_report.html", self.get_context())
                 pdf_file = HTML(string=html_string).write_pdf()
 
