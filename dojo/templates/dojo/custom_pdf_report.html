@@ -2,21 +2,78 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{{ report_name }}</title>
     <style>
-    body {
-        font-family: "DejaVu Sans", Arial, sans-serif;
-        margin: 0;
-        padding: 0;
-        background-color: #f8f9fa;
-        color: #212529;
-    }
+        @page {
+          size: A4;
+          margin: 20mm 15mm 20mm 15mm;
+        }
 
-    .widget {
-        margin-bottom: 40px;
-        /* page-break-inside: avoid; удалено */
-    }
-</style>
+        body {
+          font-family: 'Montserrat', sans-serif;
+          color: black;
+          background: white;
+          margin: 0;
+          padding: 0;
+        }
+
+        /* Шапка */
+        .report-header {
+          background-color: #0050C6;
+          color: white;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 10px 15px;
+          font-size: 10pt;
+          /* Фиксированная высота */
+          height: 60px;
+          box-sizing: border-box;
+        }
+
+        /* Левая колонка с контактами */
+        .report-header .left-col {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          font-weight: 600;
+          line-height: 1.2;
+          font-size: 9pt;
+        }
+
+        /* Правая колонка — логотип */
+        .report-header .right-col img {
+          height: 40px;
+          width: auto;
+        }
+
+        /* Титульная страница */
+        .cover_page {
+          padding-top: 80px; /* Отступ, чтобы не залезло под шапку */
+          background-color: white;
+          min-height: 270mm; /* Высота страницы A4 minus поля и шапка */
+          text-align: center;
+        }
+
+        .cover_page #heading {
+          font-size: 32pt;
+          margin-bottom: 10mm;
+        }
+
+        .cover_page #sub_heading {
+          font-size: 18pt;
+          margin-bottom: 5mm;
+        }
+
+        .cover_page #meta_info {
+          font-size: 14pt;
+          margin-bottom: 10mm;
+          font-weight: 600;
+        }
+
+        .cover_page p {
+          font-size: 10pt;
+        }
+    </style>
 
 
 </head>
