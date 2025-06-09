@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+          size: A4;
+          margin: 20mm 15mm 20mm 15mm;
+
+          @top-center {
+            content: element(header);
+          }
+        }
+
+        /* Объявляем header как элемент для колонтитула */
+        .report-header {
+          position: running(header);
+          background-color: #0050C6;
+          color: white;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 5mm 10mm;
+          font-size: 10pt;
+          height: 50px;
+          box-sizing: border-box;
+          width: 100%;
+        }
+
+        /* Контактная инфа слева */
+        .report-header .left-col {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          font-weight: 600;
+          line-height: 1.2;
+          font-size: 9pt;
+        }
+
+        /* Логотип справа */
+        .report-header .right-col img {
+          height: 40px;
+          width: auto;
+        }
+
+        /* Чтобы основной контент не перекрывал колонтитул */
+        body {
+          font-family: 'Montserrat', sans-serif;
+          margin: 0;
+          padding-top: 60px; /* Отступ, чтобы не наезжать на header */
+          background: white;
+          color: black;
+        }
+    </style>
+
+
+</head>
+<body>
+
+<div class="container">
+    {% if include_disclaimer %}
+        <div class="alert alert-warning disclaimer">
+            <strong>Disclaimer:</strong><br>
+            {{ disclaimer|safe }}
+        </div>
+    {% endif %}
+
+    {% for widget in widgets %}
+        <div class="widget">
+             {{ widget.get_html }}
+        </div>
+    {% endfor %}
+</div>
+
+</body>
+</html>
+

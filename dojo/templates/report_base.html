@@ -4,100 +4,163 @@
 <head>
     <meta charset="UTF-8">
     <title>{{ report_name }}</title>
-    <link rel="stylesheet" href="{% static "dojo/css/bootswatch/yeti/bootstrap.min.css" %}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <!-- Custom Fonts -->
-    <link href="{% static "font-awesome/css/font-awesome.min.css" %}" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.6.0/css/fontawesome.min.css" integrity="sha384-NvKbDTEnL+A8F/AA5Tc5kmMLSJHUO868P+lDtTpJIeQdGYaUIuLr4lVGOEA1OcMy" crossorigin="anonymous">
 
     <style type="text/css">
-        @import url(https://fonts.googleapis.com/css?family=Roboto+Slab:400,700);
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
 
-        .label {
-          border-color: #DEE1E6;
-          color: #ffffff !important;
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f5f5f5;
+            color: #212121;
+            margin: 0;
+            padding: 0;
         }
 
         .container {
-            margin: 0 auto;
-            max-width: 960px;
+            max-width: 80%;
+            width: 80%;
+            margin: 20px auto;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
         }
 
-        .page-cover {
-            margin-bottom: 600px !important;
+        .report-page-break {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 40px 0;
         }
 
-        .page-cover-spacer {
-            height: 400px !important;
+        .report-page-break::before,
+        .report-page-break::after {
+            content: '';
+            flex: 1;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .report-page-break:not(:empty)::before {
+            margin-right: 10px;
+        }
+
+        .report-page-break:not(:empty)::after {
+            margin-left: 10px;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-weight: 500;
+        }
+
+        /* Карточки */
+        .panel {
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.2);
+            margin-bottom: 20px;
         }
 
         .panel-default {
-            border-color: #A1C0D7 !important;
-        }
-
-        .panel-default > .panel-heading {
-            color: #333 !important;
-            background-color: rgba(32, 166, 216, 0.75)!important;
-            border-color: rgba(32, 166, 216, 0.75) !important;
-            border-radius: 0px !important;
-        }
-
-        .panel-info {
-            border-color: #DEE1E6 !important;
-            border-radius: 0px !important;
-        }
-
-        .panel-info > .panel-heading {
-            color: #333 !important;
-            background-color: #DEE1E6 !important;
-            border-color: #DEE1E6 !important;
-            border-radius: 0px !important;
-        }
-
-        .panel-body {
-            border-radius: 0px !important;
-        }
-
-        .severity {
-            font-size: 100%;
-        }
-
-        .severity- {
-            color: black !important;
-        }
-
-        .severity-Info {
-            background-color: #888888 !important;
-        }
-
-        .severity-Low {
-            background-color: #337ab7 !important;
-        }
-
-        .severity-Medium {
-            background-color: #FBE413 !important;
-        }
-
-        .severity-High {
-            background-color: #f09835 !important;
-        }
-
-        .severity-Critical {
-            background-color: #d9534f !important;
+            margin-top: 100px; /* Увеличенный отступ перед панелью */
         }
 
         .panel-heading {
-            padding: 1px 5px;
+            background-color: #410299;
+            color: white;
+            padding: 15px;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            font-size: 18px;
+            font-weight: 500;
         }
 
-        .page-cover {
-            page-break-after: always
+        .panel-body {
+            padding: 15px;
+            background: white;
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
         }
 
-        .keep-together {
-            page-break-inside: avoid
+        .panel-body, .container {
+            word-wrap: break-word; /* Перенос длинных слов */
+            overflow-wrap: break-word;
+            white-space: normal; /* Обычный перенос строк */
         }
 
-        #findings, #executive {
-            page-break-before: always;
+        pre, code {
+            white-space: pre-wrap; /* Перенос строк в блоках кода */
+            word-break: break-word;
+            overflow-x: auto; /* Добавление прокрутки при необходимости */
+            max-width: 100%;
+        }
+
+        /* Таблицы */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        table th, table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        table th {
+            background-color: #410299;
+            color: white;
+            font-weight: 500;
+        }
+
+        /* Метки серьезности */
+        .severity {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 4px;
+            color: white;
+            font-weight: 500;
+        }
+
+        .severity-Info { background-color: #607d8b; }
+        .severity-Low { background-color: #2196f3; }
+        .severity-Medium { background-color: #ff9800; }
+        .severity-High { background-color: #f44336; }
+        .severity-Critical { background-color: #d50000; }
+
+        /* Кнопки */
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #410299;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+
+        .button:hover {
+            background-color: #3700b3;
+        }
+
+        /* Разделы */
+        h6 {
+            font-size: 16px;
+            font-weight: 500;
+            border-bottom: 2px solid #410299;
+            padding-bottom: 5px;
+            margin-top: 20px;
+        }
+
+        pre {
+            overflow-x: auto;
+            padding: 10px;
+            background: #f5f5f5; /* Легкий фон для читабельности */
+            border-radius: 5px;
         }
 
         .graph {
@@ -110,91 +173,23 @@
             width: 898px;
         }
 
-        h6{
-            font-size: 120%;
-            border-bottom: 1px solid black;
-            padding-bottom: 8px;
+        .report_findings_severity {
+            margin-top: 100px;
+            font-size: 25px;
+            background-color: #cccccc;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
+            text-align: center
         }
 
-        .panel-heading h6{
-            border-bottom: 0;
-            padding-bottom: 0;
+        .report_findings_entry {
+            font-size: 20px;
         }
 
-        pre, p {
-            padding: 0;
-            border: 0;
-            background-color: transparent;
-            page-break-inside: auto;
-            margin-bottom: 15px !important;
-        }
-
-        pre {
-            white-space: pre-wrap !important;
-            padding: 0 !important;
-            overflow: visible !important;
-            word-break: normal !important;
-        }
-
-        ul{
-            margin-bottom: 15px !important;
-        }
-
-        h4, .h4, h5, .h5, h6, .h6 {
-            margin-top: 20px;
-            margin-bottom: 11px;
-        }
-
-        .panel-heading h5 {
-          color: white !important;
-        }
-
-        div.pretty-graphs, .panel, .panel-body {
-            page-break-inside: avoid;
-        }
-
-        *, pre {
-            font-family: 'Roboto Slab', monospace !important;
-            font-size: 13px;
-        }
-
-        .flot-tick-label.tickLabel {
-            font-size: 11px;
-        }
-
-        .raw_request {
-            font-family: "Courier New", Courier, "Lucida Sans Typewriter", "Lucida Typewriter", monospace !important;
-        }
-
-        .panel-warning .panel-heading h4{
-            color: #fff;
-        }
-
-        @media not print {
-            .report-page-break {
-                display: flex;
-                align-items: center;
-                text-align: center;
-            }
-            .report-page-break::before,
-            .report-page-break::after {
-                content: '';
-                flex: 1;
-                border-bottom: 1px dashed #000;
-            }
-            .report-page-break:not(:empty)::before {
-                margin-right: 0.25em;
-            }
-            .report-page-break:not(:empty)::after {
-                margin-left: 0.25em;
-            }
-        }
-
-        @media print {
-            .report-page-break {
-                page-break-after: always;
-                visibility: hidden;
-            }
+        .finding-title {
+            background-color: #6200ea;
         }
     </style>
 </head>

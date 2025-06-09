@@ -140,7 +140,7 @@ class PageBreak(Widget):
         self.multiple = "true"
 
     def get_html(self):
-        return mark_safe('<div class="report-page-break">Page Break</div>')
+        return mark_safe('<div class="report-page-break"></div>')
 
     def get_option_form(self):
         return mark_safe(

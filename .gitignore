@@ -67,6 +67,8 @@ selenium_page_source.html
 # Sphinx documentation
 docs/_build/
 
+dojo/static/dojo/img/logo_link.png
+
 #others
 .DS_Store
 *.crt

@@ -11,8 +11,11 @@ from django.http import Http404, HttpRequest, HttpResponse, QueryDict
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views import View
+from django.template import loader
 from openpyxl import Workbook
 from openpyxl.styles import Font
+from weasyprint import HTML
+from django.template.loader import render_to_string
 
 from dojo.authorization.authorization import user_has_permission_or_403
 from dojo.authorization.authorization_decorators import user_is_authorized
@@ -120,11 +123,22 @@ class ReportBuilder(View):
 
 class CustomReport(View):
     def post(self, request: HttpRequest) -> HttpResponse:
-        # saving the report
         form = self.get_form(request)
         if form.is_valid():
             self._set_state(request)
+
+            if request.POST.get("pdf") == "true":
+                context = self.get_context()
+                template = loader.get_template("dojo/custom_pdf_report.html")
+                html_string = template.render(context, request=request)
+
+                pdf_file = HTML(string=html_string).write_pdf()
+                response = HttpResponse(pdf_file, content_type="application/pdf")
+                response["Content-Disposition"] = "attachment; filename=custom_report.pdf"
+                return response
+
             return render(request, self.get_template(), self.get_context())
+
         raise PermissionDenied
 
     def _set_state(self, request: HttpRequest):

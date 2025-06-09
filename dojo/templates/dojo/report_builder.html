@@ -23,7 +23,8 @@
                 </div>
                 <div class="panel-footer">
                     <div class="clearfix">
-                        <a class="btn btn-success disabled pull-right run_report" href="#">Run</a>
+                        <a class="btn btn-success disabled pull-right run_report" href="#">Run HTML</a>
+                        <a class="btn btn-success disabled pull-right run_pdf_report" style="margin-right: 10px;" href="#">Run PDF</a>
                     </div>
                 </div>
             </div>
@@ -85,6 +86,7 @@
 
             if ($('.in-use-widgets ul#sortable2 li').length > 0) {
                 $('a.run_report').removeClass('disabled');
+                $('a.run_pdf_report').removeClass('disabled');
             }
         }
 
@@ -177,6 +179,12 @@
 
                 $('form#custom_report textarea#json').val(json_content);
 
+                $('<input>').attr({
+                    type: 'hidden',
+                    name: 'pdf',
+                    value: 'false'
+                }).appendTo('form#custom_report');
+
                 $('form#custom_report').removeClass('hidden').submit();
             }
             else {
@@ -185,6 +193,54 @@
 
             event.preventDefault();
         }
+
+        function runPdfReport(event) {
+            var valid = true;
+
+            $('.in-use-widgets .form-control').not('#finding-list .form-control')
+                .not('#endpoint-list .form-control').not('#wysiwyg-content .form-control')
+                .not('.bs-searchbox .form-control').not('div').each(function () {
+                if ($(this).val() === '')
+                    valid = false;
+            });
+
+            if (valid) {
+                var result = [];
+                $('.in-use-widgets form').each(function () {
+                    var _form = $(this);
+
+                    $(this).find('.editor').each(function () {
+                        _form.find('input[name="hidden_content"]').attr('value', $(this).html().replace( /(<br>|\s|<div><br><\/div>|&nbsp;)*$/, ""));
+                    });
+
+                    var sr = $(this).serializeArray();
+
+                    var y = {};
+                    y[this.id] = sr;
+                    result.push(y);
+                });
+
+                var json_content = JSON.stringify(result);
+
+                // ⚠️ Ключевая разница: отправка на другой URL или добавление флага
+                $('form#custom_report textarea#json').val(json_content);
+
+                // Установим скрытый флаг, что нужно PDF
+                $('<input>').attr({
+                    type: 'hidden',
+                    name: 'pdf',
+                    value: 'true'
+                }).appendTo('form#custom_report');
+
+                $('form#custom_report').removeClass('hidden').submit();
+            }
+            else {
+                alert('Please complete all forms.')
+            }
+
+            event.preventDefault();
+        }
+
         {% block report_functions %}
         {% endblock %}
         $(function () {
@@ -220,9 +276,11 @@
 
                     if ($('.in-use-widgets ul#sortable2 li').length > 0) {
                         $('a.run_report').removeClass('disabled');
+                        $('a.run_pdf_report').removeClass('disabled');
                     }
                     else {
                         $('a.run_report').addClass('disabled');
+                        $('a.run_pdf_report').addClass('disabled');
                     }
                 },
                 receive: function(event, ui) {
@@ -237,9 +295,11 @@
 
                     if ($('.in-use-widgets ul#sortable2 li').length > 0) {
                         $('a.run_report').removeClass('disabled');
+                        $('a.run_pdf_report').removeClass('disabled');
                     }
                     else {
                         $('a.run_report').addClass('disabled');
+                        $('a.run_pdf_report').addClass('disabled');
                     }
 
                     if (ui.item.attr('class') === 'wysiwyg-content') {
@@ -350,6 +410,7 @@
             });
 
             $('a.run_report').on('click', runReport);
+            $('.run_pdf_report').on('click', runPdfReport);
         });
     </script>
 {% endblock %}

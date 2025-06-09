@@ -11,6 +11,8 @@ services:
     build:
       context: ./
       dockerfile: "Dockerfile.nginx-${DEFECT_DOJO_OS:-debian}"
+      tags:
+        - dd_nginx
     image: "defectdojo/defectdojo-nginx:${NGINX_VERSION:-latest}"
     depends_on:
       - uwsgi
@@ -29,11 +31,15 @@ services:
         published: ${DD_TLS_PORT:-8443}
         protocol: tcp
         mode: host
+    restart: unless-stopped
+
   uwsgi:
     build:
       context: ./
       dockerfile: "Dockerfile.django-${DEFECT_DOJO_OS:-debian}"
       target: django
+      tags:
+        - dd_uwsgi
     image: "defectdojo/defectdojo-django:${DJANGO_VERSION:-latest}"
     depends_on:
       - postgres
@@ -52,6 +58,8 @@ services:
           source: ./docker/extra_settings
           target: /app/docker/extra_settings
         - "defectdojo_media:${DD_MEDIA_ROOT:-/app/media}"
+    restart: unless-stopped
+
   celerybeat:
     image: "defectdojo/defectdojo-django:${DJANGO_VERSION:-latest}"
     depends_on:
@@ -68,6 +76,8 @@ services:
         - type: bind
           source: ./docker/extra_settings
           target: /app/docker/extra_settings
+    restart: unless-stopped
+
   celeryworker:
     image: "defectdojo/defectdojo-django:${DJANGO_VERSION:-latest}"
     depends_on:
@@ -85,6 +95,8 @@ services:
           source: ./docker/extra_settings
           target: /app/docker/extra_settings
         - "defectdojo_media:${DD_MEDIA_ROOT:-/app/media}"
+    restart: unless-stopped
+
   initializer:
     image: "defectdojo/defectdojo-django:${DJANGO_VERSION:-latest}"
     depends_on:
@@ -93,7 +105,7 @@ services:
     environment:
       DD_DATABASE_URL: ${DD_DATABASE_URL:-postgresql://defectdojo:defectdojo@postgres:5432/defectdojo}
       DD_ADMIN_USER: "${DD_ADMIN_USER:-admin}"
-      DD_ADMIN_MAIL: "${DD_ADMIN_USER:-admin@defectdojo.local}"
+      DD_ADMIN_MAIL: "${DD_ADMIN_MAIL:-admin@defectdojo.local}"
       DD_ADMIN_FIRST_NAME: "${DD_ADMIN_FIRST_NAME:-Admin}"
       DD_ADMIN_LAST_NAME: "${DD_ADMIN_LAST_NAME:-User}"
       DD_INITIALIZE: "${DD_INITIALIZE:-true}"
@@ -112,11 +124,13 @@ services:
       POSTGRES_PASSWORD: ${DD_DATABASE_PASSWORD:-defectdojo}
     volumes:
       - defectdojo_postgres:/var/lib/postgresql/data
+    restart: unless-stopped
   redis:
     # Pinning to this version due to licensing constraints
     image: redis:7.2.8-alpine@sha256:c88ea2979a49ca497bbf7d39241b237f86c98e58cb2f6b1bc2dd167621f819bb
     volumes:
       - defectdojo_redis:/data
+    restart: unless-stopped
 volumes:
   defectdojo_postgres: {}
   defectdojo_media: {}

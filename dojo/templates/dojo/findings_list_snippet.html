@@ -392,6 +392,18 @@
                                     <th scope="col"> 
                                         {% trans "Planned Remediation" %}
                                     </th>
+                                    <th scope="col">
+                                        {% trans "Mitigation" %}
+                                    </th>
+                                    <th scope="col">
+                                        {% trans "Description" %}
+                                    </th>
+                                    <th scope="col">
+                                        {% trans "Endpoints" %}
+                                    </th>
+                                    <th scope="col">
+                                        {% trans "File Path" %}
+                                    </th>
                                     {% if filter_name != 'Closed' %}
                                         <th scope="col">
                                             {% trans "Reviewers" %}
@@ -712,6 +724,34 @@
                                         <td class="nowrap">
                                             {% if finding.planned_remediation_date %}{{ finding.planned_remediation_date }}{% endif %}
                                         </td>
+
+
+                                        <td>
+                                            {% if finding.mitigation %}{{ finding.mitigation }}{% endif %}
+                                        </td>
+
+                                        <td>
+                                            {% if finding.description %}{{ finding.description }}{% endif %}
+                                        </td>
+
+                                        <td>
+                                            {% if finding|has_endpoints %}
+                                                {% with endpoints=finding|get_vulnerable_endpoints %}
+                                                    {% if endpoints %}
+                                                        <ul>
+                                                            {% for endpoint in endpoints %}
+                                                                <li>{{ endpoint }}</li>
+                                                            {% endfor %}
+                                                        </ul>
+                                                    {% endif %}
+                                                {% endwith %}
+                                            {% endif %}
+                                        </td>
+
+                                        <td>
+                                            {% if finding.file_path %}{{ finding.file_path }}{% endif %}
+                                        </td>
+
                                         {% if filter_name != 'Closed' %}
                                             <td class="nowrap">
                                                 {% if finding.reviewers %}
@@ -802,6 +842,10 @@
                 {% endif %}
                 { "data": "service" },
                 { "data": "planned_remediation_date" },
+                { "data": "mitigation"},
+                { "data": "description"},
+                { "data": "endpoints"},
+                { "data": "file_path"},
                 {% if filter_name != 'Closed' %}
                     { "data": "reviewers" },
                 {% endif %}
@@ -905,7 +949,14 @@
                             pageSize: 'LETTER'
                         }),
                         $.extend( true, {}, buttonCommon, {
-                            extend: 'print'
+                            extend: 'print',
+                            exportOptions: {
+                                columns: ':visible:not(.noVis)',
+                                stripHtml: true,
+                                stripNewlines: true,
+                                trim: true,
+                                orthogonal: 'export'
+                            }
                         }),
                     ],
                 });
