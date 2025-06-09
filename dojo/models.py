@@ -6,9 +6,11 @@ import re
 import warnings
 from contextlib import suppress
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
 
+import dateutil
 import hyperlink
 import tagulous.admin
 from auditlog.registry import auditlog
@@ -66,7 +68,7 @@ IMPORT_ACTIONS = [
     (IMPORT_CREATED_FINDING, "created"),
     (IMPORT_CLOSED_FINDING, "closed"),
     (IMPORT_REACTIVATED_FINDING, "reactivated"),
-    (IMPORT_UNTOUCHED_FINDING, "left untouched"),
+    (IMPORT_UNTOUCHED_FINDING, "untouched"),
 ]
 
 
@@ -101,8 +103,10 @@ def _get_statistics_for_queryset(qs, annotation_factory):
     return stats
 
 
-def _manage_inherited_tags(obj, incoming_inherited_tags, potentially_existing_tags=[]):
+def _manage_inherited_tags(obj, incoming_inherited_tags, potentially_existing_tags=None):
     # get copies of the current tag lists
+    if potentially_existing_tags is None:
+        potentially_existing_tags = []
     current_inherited_tags = [] if isinstance(obj.inherited_tags, FakeTagRelatedManager) else [tag.name for tag in obj.inherited_tags.all()]
     tag_list = potentially_existing_tags if isinstance(obj.tags, FakeTagRelatedManager) or len(potentially_existing_tags) > 0 else [tag.name for tag in obj.tags.all()]
     # Clean existing tag list from the old inherited tags. This represents the tags on the object and not the product
@@ -123,7 +127,9 @@ def _manage_inherited_tags(obj, incoming_inherited_tags, potentially_existing_ta
             obj.tags.set(cleaned_tag_list)
 
 
-def _copy_model_util(model_in_database, exclude_fields: list[str] = []):
+def _copy_model_util(model_in_database, exclude_fields: list[str] | None = None):
+    if exclude_fields is None:
+        exclude_fields = []
     new_model_instance = model_in_database.__class__()
     for field in model_in_database._meta.fields:
         if field.name not in {"id", *exclude_fields}:
@@ -166,6 +172,8 @@ class Regulation(models.Model):
     EDUCATION_CATEGORY = "education"
     MEDICAL_CATEGORY = "medical"
     CORPORATE_CATEGORY = "corporate"
+    SECURITY_CATEGORY = "security"
+    GOVERNMENT_CATEGORY = "government"
     OTHER_CATEGORY = "other"
     CATEGORY_CHOICES = (
         (PRIVACY_CATEGORY, _("Privacy")),
@@ -173,12 +181,14 @@ class Regulation(models.Model):
         (EDUCATION_CATEGORY, _("Education")),
         (MEDICAL_CATEGORY, _("Medical")),
         (CORPORATE_CATEGORY, _("Corporate")),
+        (SECURITY_CATEGORY, _("Security")),
+        (GOVERNMENT_CATEGORY, _("Government")),
         (OTHER_CATEGORY, _("Other")),
     )
 
     name = models.CharField(max_length=128, unique=True, help_text=_("The name of the regulation."))
     acronym = models.CharField(max_length=20, unique=True, help_text=_("A shortened representation of the name."))
-    category = models.CharField(max_length=9, choices=CATEGORY_CHOICES, help_text=_("The subject of the regulation."))
+    category = models.CharField(max_length=16, choices=CATEGORY_CHOICES, help_text=_("The subject of the regulation."))
     jurisdiction = models.CharField(max_length=64, help_text=_("The territory over which the regulation applies."))
     description = models.TextField(blank=True, help_text=_("Information about the regulation's purpose."))
     reference = models.URLField(blank=True, help_text=_("An external URL for more information."))
@@ -1044,7 +1054,7 @@ class SLA_Configuration(models.Model):
                     super(Product, product).save()
                 # launch the async task to update all finding sla expiration dates
                 from dojo.sla_config.helpers import update_sla_expiration_dates_sla_config_async
-                update_sla_expiration_dates_sla_config_async(self, tuple(severities), products)
+                update_sla_expiration_dates_sla_config_async(self, products, tuple(severities))
 
     def clean(self):
         sla_days = [self.critical, self.high, self.medium, self.low]
@@ -1151,7 +1161,7 @@ class Product(models.Model):
     lifecycle = models.CharField(max_length=12, choices=LIFECYCLE_CHOICES, blank=True, null=True)
     origin = models.CharField(max_length=19, choices=ORIGIN_CHOICES, blank=True, null=True)
     user_records = models.PositiveIntegerField(blank=True, null=True, help_text=_("Estimate the number of user records within the application."))
-    revenue = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True, help_text=_("Estimate the application's revenue."))
+    revenue = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True, validators=[MinValueValidator(Decimal("0.00"))], help_text=_("Estimate the application's revenue."))
     external_audience = models.BooleanField(default=False, help_text=_("Specify if the application is used by people outside the organization."))
     internet_accessible = models.BooleanField(default=False, help_text=_("Specify if the application is accessible from the public internet."))
     regulations = models.ManyToManyField(Regulation, blank=True)
@@ -1205,7 +1215,7 @@ class Product(models.Model):
                     sla_config.async_updating = True
                     super(SLA_Configuration, sla_config).save()
                 # launch the async task to update all finding sla expiration dates
-                from dojo.product.helpers import update_sla_expiration_dates_product_async
+                from dojo.sla_config.helpers import update_sla_expiration_dates_product_async
                 update_sla_expiration_dates_product_async(self, sla_config)
 
     def get_absolute_url(self):
@@ -1296,10 +1306,7 @@ class Product(models.Model):
     def open_findings_list(self):
         findings = Finding.objects.filter(test__engagement__product=self,
                                           active=True)
-        findings_list = []
-        for i in findings:
-            findings_list.append(i.id)
-        return findings_list
+        return [i.id for i in findings]
 
     @property
     def has_jira_configured(self):
@@ -2552,7 +2559,7 @@ class Finding(models.Model):
                                            blank=True,
                                            max_length=500,
                                            verbose_name=_("Unique ID from tool"),
-                                           help_text=_("Vulnerability technical id from the source tool. Allows to track unique vulnerabilities."))
+                                           help_text=_("Vulnerability technical id from the source tool. Allows to track unique vulnerabilities over time across subsequent scans."))
     vuln_id_from_tool = models.CharField(null=True,
                                          blank=True,
                                          max_length=500,
@@ -2670,8 +2677,12 @@ class Finding(models.Model):
 
     def save(self, dedupe_option=True, rules_option=True, product_grading_option=True,  # noqa: FBT002
              issue_updater_option=True, push_to_jira=False, user=None, *args, **kwargs):  # noqa: FBT002 - this is bit hard to fix nice have this universally fixed
+        logger.debug("Start saving finding of id " + str(self.id) + " dedupe_option:" + str(dedupe_option) + " (self.pk is %s)", "None" if self.pk is None else "not None")
 
         from dojo.finding import helper as finding_helper
+
+        # if not isinstance(self.date, (datetime, date)):
+        #     raise ValidationError(_("The 'date' field must be a valid date or datetime object."))
 
         if not user:
             from dojo.utils import get_current_user
@@ -2997,27 +3008,17 @@ class Finding(models.Model):
         if start_date and isinstance(start_date, str):
             start_date = parse(start_date).date()
 
-        from dojo.utils import get_work_days
-        if settings.SLA_BUSINESS_DAYS:
-            if self.mitigated:
-                mitigated_date = self.mitigated
-                if isinstance(mitigated_date, datetime):
-                    mitigated_date = self.mitigated.date()
-                days = get_work_days(self.date, mitigated_date)
-            else:
-                days = get_work_days(self.date, get_current_date())
-        else:
-            if isinstance(start_date, datetime):
-                start_date = start_date.date()
+        if isinstance(start_date, datetime):
+            start_date = start_date.date()
 
-            if self.mitigated:
-                mitigated_date = self.mitigated
-                if isinstance(mitigated_date, datetime):
-                    mitigated_date = self.mitigated.date()
-                diff = mitigated_date - start_date
-            else:
-                diff = get_current_date() - start_date
-            days = diff.days
+        if self.mitigated:
+            mitigated_date = self.mitigated
+            if isinstance(mitigated_date, datetime):
+                mitigated_date = self.mitigated.date()
+            diff = mitigated_date - start_date
+        else:
+            diff = get_current_date() - start_date
+        days = diff.days
         return max(0, days)
 
     @property
@@ -3034,7 +3035,7 @@ class Finding(models.Model):
         return self.date
 
     def get_sla_period(self):
-        sla_configuration = SLA_Configuration.objects.filter(id=self.test.engagement.product.sla_configuration_id).first()
+        sla_configuration = self.test.engagement.product.sla_configuration
         sla_period = getattr(sla_configuration, self.severity.lower(), None)
         enforce_period = getattr(sla_configuration, str("enforce_" + self.severity.lower()), None)
         return sla_period, enforce_period
@@ -3044,22 +3045,16 @@ class Finding(models.Model):
         if not system_settings.enable_finding_sla:
             return
 
-        days_remaining = None
+        # some parsers provide date as a `str` instead of a `date` in which case we need to parse it #12299 on GitHub
+        sla_start_date = self.get_sla_start_date()
+        if sla_start_date and isinstance(sla_start_date, str):
+            sla_start_date = dateutil.parser.parse(sla_start_date).date()
+
         sla_period, enforce_period = self.get_sla_period()
         if sla_period is not None and enforce_period:
-            days_remaining = sla_period - self.sla_age
+            self.sla_expiration_date = sla_start_date + relativedelta(days=sla_period)
         else:
-            self.sla_expiration_date = Finding().sla_expiration_date
-            return
-
-        if days_remaining:
-            if self.mitigated:
-                mitigated_date = self.mitigated
-                if isinstance(mitigated_date, datetime):
-                    mitigated_date = self.mitigated.date()
-                self.sla_expiration_date = mitigated_date + relativedelta(days=days_remaining)
-            else:
-                self.sla_expiration_date = get_current_date() + relativedelta(days=days_remaining)
+            self.sla_expiration_date = None
 
     def sla_days_remaining(self):
         if self.sla_expiration_date:
@@ -3131,6 +3126,7 @@ class Finding(models.Model):
         return self.finding_group is not None
 
     def save_no_options(self, *args, **kwargs):
+        logger.debug("save_no_options")
         return self.save(dedupe_option=False, rules_option=False, product_grading_option=False,
              issue_updater_option=False, push_to_jira=False, user=None, *args, **kwargs)
 
@@ -3348,9 +3344,7 @@ class Finding(models.Model):
     def vulnerability_ids(self):
         # Get vulnerability ids from database and convert to list of strings
         vulnerability_ids_model = self.vulnerability_id_set.all()
-        vulnerability_ids = []
-        for vulnerability_id in vulnerability_ids_model:
-            vulnerability_ids.append(vulnerability_id.vulnerability_id)
+        vulnerability_ids = [vulnerability_id.vulnerability_id for vulnerability_id in vulnerability_ids_model]
 
         # Synchronize the cve field with the unsaved_vulnerability_ids
         # We do this to be as flexible as possible to handle the fields until
@@ -3557,9 +3551,7 @@ class Finding_Template(models.Model):
     def vulnerability_ids(self):
         # Get vulnerability ids from database and convert to list of strings
         vulnerability_ids_model = self.vulnerability_id_template_set.all()
-        vulnerability_ids = []
-        for vulnerability_id in vulnerability_ids_model:
-            vulnerability_ids.append(vulnerability_id.vulnerability_id)
+        vulnerability_ids = [vulnerability_id.vulnerability_id for vulnerability_id in vulnerability_ids_model]
 
         # Synchronize the cve field with the unsaved_vulnerability_ids
         # We do this to be as flexible as possible to handle the fields until
@@ -3850,8 +3842,8 @@ class GITHUB_PKey(models.Model):
 class JIRA_Instance(models.Model):
     configuration_name = models.CharField(max_length=2000, help_text=_("Enter a name to give to this configuration"), default="")
     url = models.URLField(max_length=2000, verbose_name=_("JIRA URL"), help_text=_("For more information how to configure Jira, read the DefectDojo documentation."))
-    username = models.CharField(max_length=2000)
-    password = models.CharField(max_length=2000)
+    username = models.CharField(max_length=2000, verbose_name=_("Username/Email"), help_text=_("Username or Email Address, see DefectDojo documentation for more information."))
+    password = models.CharField(max_length=2000, verbose_name=_("Password/Token"), help_text=_("Password, API Token, or Personal Access Token, see DefectDojo documentation for more information."))
 
     if hasattr(settings, "JIRA_ISSUE_TYPE_CHOICES_CONFIG"):
         default_issue_type_choices = settings.JIRA_ISSUE_TYPE_CHOICES_CONFIG

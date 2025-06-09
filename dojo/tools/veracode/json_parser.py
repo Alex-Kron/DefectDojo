@@ -276,7 +276,7 @@ class VeracodeJSONParser:
             # Check for any wonky formats post version replacement that had extensions
             finding.component_name = finding.component_name.replace("-.", ".").replace("_.", ".")
             # Check for the event that the component name did not have an extension, but name has a dangling hyphen/underscore
-            if finding.component_name.endswith("-") or finding.component_name.endswith("_"):
+            if finding.component_name.endswith(("-", "_")):
                 finding.component_name = finding.component_name[:-1]
         # check if the CWE title was used. A cwe may not be present when a veracode SRCCLR is present
         if not finding.title:
@@ -349,10 +349,7 @@ class VeracodeJSONParser:
         sections = [section.strip() for section in sections if len(section) > 0]
         # Iterate over the references to find the link and label for each entry
         regex_search = 'href=\\"(.*)\\">(.*)</a>'
-        references = []
-        for reference in sections:
-            if matches := re.search(regex_search, reference):
-                references.append(matches.groups())
+        references = [matches.groups() for reference in sections if (matches := re.search(regex_search, reference))]
         # Build a markdown string for the references text
         reference_string = ""
         for reference in references:

@@ -1,3 +1,4 @@
+# noqa: N999 - see https://github.com/DefectDojo/django-DefectDojo/pull/11647
 #########################################################################################################
 # It is not recommended to edit file 'settings.dist.py', for production deployments.                        #
 # Any customization of variables need to be done via environmental variables or in 'local_settings.py'. #
@@ -42,6 +43,7 @@ env = environ.FileAwareEnv(
     DD_SECURE_HSTS_SECONDS=(int, 31536000),  # One year expiration
     DD_SESSION_COOKIE_SECURE=(bool, False),
     DD_SESSION_EXPIRE_AT_BROWSER_CLOSE=(bool, False),
+    DD_SESSION_EXPIRE_WARNING=(int, 300),  # warning 5 mins before expiration
     DD_SESSION_COOKIE_AGE=(int, 1209600),  # 14 days
     DD_CSRF_COOKIE_SECURE=(bool, False),
     DD_CSRF_TRUSTED_ORIGINS=(list, []),
@@ -82,6 +84,7 @@ env = environ.FileAwareEnv(
     DD_CELERY_BEAT_SCHEDULE_FILENAME=(str, root("dojo.celery.beat.db")),
     DD_CELERY_TASK_SERIALIZER=(str, "pickle"),
     DD_CELERY_PASS_MODEL_BY_ID=(str, True),
+    DD_CELERY_LOG_LEVEL=(str, "INFO"),
     DD_FOOTER_VERSION=(str, ""),
     # models should be passed to celery by ID, default is False (for now)
     DD_FORCE_LOWERCASE_TAGS=(bool, True),
@@ -216,8 +219,6 @@ env = environ.FileAwareEnv(
     # finetuning settings for when enabled
     DD_SLA_NOTIFY_PRE_BREACH=(int, 3),
     DD_SLA_NOTIFY_POST_BREACH=(int, 7),
-    # Use business day's to calculate SLA's and age instead of calendar days
-    DD_SLA_BUSINESS_DAYS=(bool, False),
     # maximum number of result in search as search can be an expensive operation
     DD_SEARCH_MAX_RESULTS=(int, 100),
     DD_SIMILAR_FINDINGS_MAX_RESULTS=(int, 25),
@@ -273,10 +274,6 @@ env = environ.FileAwareEnv(
     DD_RATE_LIMITER_ACCOUNT_LOCKOUT=(bool, False),
     # when enabled SonarQube API parser will download the security hotspots
     DD_SONARQUBE_API_PARSER_HOTSPOTS=(bool, True),
-    # when enabled, finding importing will occur asynchronously, default False
-    DD_ASYNC_FINDING_IMPORT=(bool, False),
-    # The number of findings to be processed per celeryworker
-    DD_ASYNC_FINDING_IMPORT_CHUNK_SIZE=(int, 100),
     # When enabled, deleting objects will be occur from the bottom up. In the example of deleting an engagement
     # The objects will be deleted as follows Endpoints -> Findings -> Tests -> Engagement
     DD_ASYNC_OBJECT_DELETE=(bool, False),
@@ -651,7 +648,6 @@ SLA_NOTIFY_ACTIVE_VERIFIED_ONLY = env("DD_SLA_NOTIFY_ACTIVE_VERIFIED_ONLY")
 SLA_NOTIFY_WITH_JIRA_ONLY = env("DD_SLA_NOTIFY_WITH_JIRA_ONLY")  # Based on the 2 above, but only with a JIRA link
 SLA_NOTIFY_PRE_BREACH = env("DD_SLA_NOTIFY_PRE_BREACH")  # in days, notify between dayofbreach minus this number until dayofbreach
 SLA_NOTIFY_POST_BREACH = env("DD_SLA_NOTIFY_POST_BREACH")  # in days, skip notifications for findings that go past dayofbreach plus this number
-SLA_BUSINESS_DAYS = env("DD_SLA_BUSINESS_DAYS")  # Use business days to calculate SLA's and age of a finding instead of calendar days
 
 
 SEARCH_MAX_RESULTS = env("DD_SEARCH_MAX_RESULTS")
@@ -756,6 +752,7 @@ if env("DD_SECURE_HSTS_INCLUDE_SUBDOMAINS"):
     SECURE_HSTS_INCLUDE_SUBDOMAINS = env("DD_SECURE_HSTS_INCLUDE_SUBDOMAINS")
 
 SESSION_EXPIRE_AT_BROWSER_CLOSE = env("DD_SESSION_EXPIRE_AT_BROWSER_CLOSE")
+SESSION_EXPIRE_WARNING = env("DD_SESSION_EXPIRE_WARNING")
 SESSION_COOKIE_AGE = env("DD_SESSION_COOKIE_AGE")
 
 # ------------------------------------------------------------------------------
@@ -858,6 +855,7 @@ TEMPLATES = [
                 "dojo.context_processors.bind_system_settings",
                 "dojo.context_processors.bind_alert_count",
                 "dojo.context_processors.bind_announcement",
+                "dojo.context_processors.session_expiry_notification",
             ],
         },
     },
@@ -915,6 +913,7 @@ DJANGO_MIDDLEWARE_CLASSES = [
     "dojo.middleware.AuditlogMiddleware",
     "crum.CurrentRequestUserMiddleware",
     "dojo.request_cache.middleware.RequestCacheMiddleware",
+    "dojo.middleware.LongRunningRequestAlertMiddleware",
 ]
 
 MIDDLEWARE = DJANGO_MIDDLEWARE_CLASSES
@@ -1146,6 +1145,7 @@ CELERY_BEAT_SCHEDULE_FILENAME = env("DD_CELERY_BEAT_SCHEDULE_FILENAME")
 CELERY_ACCEPT_CONTENT = ["pickle", "json", "msgpack", "yaml"]
 CELERY_TASK_SERIALIZER = env("DD_CELERY_TASK_SERIALIZER")
 CELERY_PASS_MODEL_BY_ID = env("DD_CELERY_PASS_MODEL_BY_ID")
+CELERY_LOG_LEVEL = env("DD_CELERY_LOG_LEVEL")
 
 if len(env("DD_CELERY_BROKER_TRANSPORT_OPTIONS")) > 0:
     CELERY_BROKER_TRANSPORT_OPTIONS = json.loads(env("DD_CELERY_BROKER_TRANSPORT_OPTIONS"))
@@ -1344,6 +1344,7 @@ HASHCODE_FIELDS_PER_SCANNER = {
     "KrakenD Audit Scan": ["description", "mitigation", "severity"],
     "Red Hat Satellite": ["description", "severity"],
     "Qualys Hacker Guardian Scan": ["title", "severity", "description"],
+    "Cyberwatch scan (Galeax)": ["title", "description", "severity"],
 }
 
 # Override the hardcoded settings here via the env var
@@ -1414,6 +1415,7 @@ HASHCODE_ALLOWS_NULL_CWE = {
     "Threagile risks report": True,
     "HCL AppScan on Cloud SAST XML": True,
     "AWS Inspector2 Scan": True,
+    "Cyberwatch scan (Galeax)": True,
 }
 
 # List of fields that are known to be usable in hash_code computation)
@@ -1431,6 +1433,8 @@ HASH_CODE_FIELDS_ALWAYS = ["service"]
 # legacy one with multiple conditions (default mode)
 DEDUPE_ALGO_LEGACY = "legacy"
 # based on dojo_finding.unique_id_from_tool only (for checkmarx detailed, or sonarQube detailed for example)
+# When using the `unique_id_from_tool` or `vuln_id_from_tool` fields for dedupication, it's important that these are uqniue for the finding and constant over time across subsequent scans.
+# If this is not the case, the values can still be useful to set on the finding model without using them for deduplication.
 DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL = "unique_id_from_tool"
 # based on dojo_finding.hash_code only
 DEDUPE_ALGO_HASH_CODE = "hash_code"
@@ -1579,6 +1583,7 @@ DEDUPLICATION_ALGORITHM_PER_PARSER = {
     "MobSF Scorecard Scan": DEDUPE_ALGO_HASH_CODE,
     "OSV Scan": DEDUPE_ALGO_HASH_CODE,
     "Nosey Parker Scan": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL_OR_HASH_CODE,
+    # The bearer fingerprint is not unique across multiple scans, so it shouldn't be used for deduplication (https://github.com/DefectDojo/django-DefectDojo/pull/12346#issuecomment-2841561634)
     "Bearer CLI": DEDUPE_ALGO_HASH_CODE,
     "Wiz Scan": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL_OR_HASH_CODE,
     "Deepfence Threatmapper Report": DEDUPE_ALGO_HASH_CODE,
@@ -1595,6 +1600,7 @@ DEDUPLICATION_ALGORITHM_PER_PARSER = {
     "PTART Report": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL,
     "Red Hat Satellite": DEDUPE_ALGO_HASH_CODE,
     "Qualys Hacker Guardian Scan": DEDUPE_ALGO_HASH_CODE,
+    "Cyberwatch scan (Galeax)": DEDUPE_ALGO_HASH_CODE,
 }
 
 # Override the hardcoded settings here via the env var
@@ -1699,7 +1705,7 @@ LOGGING = {
         },
         "celery": {
             "handlers": [rf"{LOGGING_HANDLER}"],
-            "level": str(LOG_LEVEL),
+            "level": str(CELERY_LOG_LEVEL),
             "propagate": False,
             # workaround some celery logging known issue
             "worker_hijack_root_logger": False,
@@ -1784,10 +1790,6 @@ DUPLICATE_CLUSTER_CASCADE_DELETE = env("DD_DUPLICATE_CLUSTER_CASCADE_DELETE")
 # Deside if SonarQube API parser should download the security hotspots
 SONARQUBE_API_PARSER_HOTSPOTS = env("DD_SONARQUBE_API_PARSER_HOTSPOTS")
 
-# when enabled, finding importing will occur asynchronously, default False
-ASYNC_FINDING_IMPORT = env("DD_ASYNC_FINDING_IMPORT")
-# The number of findings to be processed per celeryworker
-ASYNC_FINDING_IMPORT_CHUNK_SIZE = env("DD_ASYNC_FINDING_IMPORT_CHUNK_SIZE")
 # When enabled, deleting objects will be occur from the bottom up. In the example of deleting an engagement
 # The objects will be deleted as follows Endpoints -> Findings -> Tests -> Engagement
 ASYNC_OBJECT_DELETE = env("DD_ASYNC_OBJECT_DELETE")
@@ -1802,12 +1804,18 @@ DELETE_PREVIEW = env("DD_DELETE_PREVIEW")
 SILENCED_SYSTEM_CHECKS = ["django_jsonfield_backport.W001"]
 
 VULNERABILITY_URLS = {
+    "ALAS": "https://alas.aws.amazon.com/AL2/&&.html",  # e.g. https://alas.aws.amazon.com/alas2.html
     "ALBA-": "https://osv.dev/vulnerability/",  # e.g. https://osv.dev/vulnerability/ALBA-2019:3411
+    "ALEA-": "https://errata.almalinux.org/8/&&.html",  # e.g. https://errata.almalinux.org/8/ALEA-2022-1998.html
+    "ALINUX2-SA-": "https://mirrors.aliyun.com/alinux/cve/",  # e.g. https://mirrors.aliyun.com/alinux/cve/alinux2-sa-20250007.xml
+    "ALINUX3-SA-": "https://mirrors.aliyun.com/alinux/3/cve/",  # e.g. https://mirrors.aliyun.com/alinux/3/cve/alinux3-sa-20250059.xml
     "ALSA-": "https://osv.dev/vulnerability/",  # e.g. https://osv.dev/vulnerability/ALSA-2024:0827
+    "ASA-": "https://security.archlinux.org/",  # e.g. https://security.archlinux.org/ASA-202003-8
     "AVD": "https://avd.aquasec.com/misconfig/",  # e.g. https://avd.aquasec.com/misconfig/avd-ksv-01010
     "BAM-": "https://jira.atlassian.com/browse/",  # e.g. https://jira.atlassian.com/browse/BAM-25498
     "BSERV-": "https://jira.atlassian.com/browse/",  # e.g. https://jira.atlassian.com/browse/BSERV-19020
     "C-": "https://hub.armosec.io/docs/",  # e.g. https://hub.armosec.io/docs/c-0085
+    "CISCO-SA-": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/",  # e.g. https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-umbrella-tunnel-gJw5thgE
     "CAPEC": "https://capec.mitre.org/data/definitions/&&.html",  # e.g. https://capec.mitre.org/data/definitions/157.html
     "CGA-": "https://images.chainguard.dev/security/",  # e.g. https://images.chainguard.dev/security/CGA-24pq-h5fw-43v3
     "CONFSERVER-": "https://jira.atlassian.com/browse/",  # e.g. https://jira.atlassian.com/browse/CONFSERVER-93361
@@ -1816,6 +1824,7 @@ VULNERABILITY_URLS = {
     "DLA-": "https://security-tracker.debian.org/tracker/",  # e.g. https://security-tracker.debian.org/tracker/DLA-3917-1
     "DSA-": "https://security-tracker.debian.org/tracker/",  # e.g. https://security-tracker.debian.org/tracker/DSA-5791-1
     "DTSA-": "https://security-tracker.debian.org/tracker/",  # e.g. https://security-tracker.debian.org/tracker/DTSA-41-1
+    "ELA-": "https://www.freexian.com/lts/extended/updates/",  # e.g. https://www.freexian.com/lts/extended/updates/ela-1387-1-erlang
     "ELBA-": "https://linux.oracle.com/errata/&&.html",  # e.g. https://linux.oracle.com/errata/ELBA-2024-7457.html
     "ELSA-": "https://linux.oracle.com/errata/&&.html",  # e.g. https://linux.oracle.com/errata/ELSA-2024-12714.html
     "FEDORA-": "https://bodhi.fedoraproject.org/updates/",  # e.g. https://bodhi.fedoraproject.org/updates/FEDORA-EPEL-2024-06aa7dc422
@@ -1823,9 +1832,12 @@ VULNERABILITY_URLS = {
     "GHSA-": "https://github.com/advisories/",  # e.g. https://github.com/advisories/GHSA-58vj-cv5w-v4v6
     "GLSA": "https://security.gentoo.org/",  # e.g. https://security.gentoo.org/glsa/202409-32
     "JSDSERVER-": "https://jira.atlassian.com/browse/",  # e.g. https://jira.atlassian.com/browse/JSDSERVER-14872
+    "KB": "https://support.hcl-software.com/csm?id=kb_article&sysparm_article=",  # e.g. https://support.hcl-software.com/csm?id=kb_article&sysparm_article=KB0108401
     "KHV": "https://avd.aquasec.com/misconfig/kubernetes/",  # e.g. https://avd.aquasec.com/misconfig/kubernetes/khv045
     "MGAA-": "https://advisories.mageia.org/&&.html",  # e.g. https://advisories.mageia.org/MGAA-2013-0054.html
     "MGASA-": "https://advisories.mageia.org/&&.html",  # e.g. https://advisories.mageia.org/MGASA-2025-0023.html
+    "NTAP-": "https://security.netapp.com/advisory/",  # e.g. https://security.netapp.com/advisory/ntap-20250328-0007
+    "OPENSUSE-SU-": "https://osv.dev/vulnerability/",  # e.g. https://osv.dev/vulnerability/openSUSE-SU-2025:14898-1
     "OSV-": "https://osv.dev/vulnerability/",  # e.g. https://osv.dev/vulnerability/OSV-2024-1330
     "PAN-SA-": "https://security.paloaltonetworks.com/",  # e.g. https://security.paloaltonetworks.com/PAN-SA-2024-0010
     "PFPT-SA-": "https://www.proofpoint.com/us/security/security-advisories/",  # e.g. https://www.proofpoint.com/us/security/security-advisories/pfpt-sa-0002
@@ -1839,6 +1851,8 @@ VULNERABILITY_URLS = {
     "RUSTSEC-": "https://rustsec.org/advisories/",  # e.g. https://rustsec.org/advisories/RUSTSEC-2024-0432
     "RXSA-": "https://errata.rockylinux.org/",  # e.g. https://errata.rockylinux.org/RXSA-2024:4928
     "SNYK-": "https://snyk.io/vuln/",  # e.g. https://security.snyk.io/vuln/SNYK-JS-SOLANAWEB3JS-8453984
+    "SSA:": "https://vulners.com/slackware/",  # e.g. https://vulners.com/slackware/SSA-2024-157-01
+    "SSA-": "https://vulners.com/slackware/",  # e.g. https://vulners.com/slackware/SSA-2025-074-01
     "SP-": "https://advisory.splunk.com/advisories/",  # e.g. https://advisory.splunk.com/advisories/SP-CAAANR7
     "SUSE-SU-": "https://www.suse.com/support/update/announcement/",  # e.g. https://www.suse.com/support/update/announcement/2024/suse-su-20244196-1
     "SVD-": "https://advisory.splunk.com/advisories/",  # e.g. https://advisory.splunk.com/advisories/SVD-2025-0103

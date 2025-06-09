@@ -2,9 +2,11 @@ import functools
 import json
 import logging
 import pathlib
+import re
 from collections import OrderedDict
 from enum import Enum
 from json import dumps
+from pathlib import Path
 
 # from drf_spectacular.renderers import OpenApiJsonRenderer
 from unittest.mock import ANY, MagicMock, call, patch
@@ -1008,8 +1010,8 @@ class RiskAcceptanceTest(BaseClass.BaseClassTest):
         self.viewset = RiskAcceptanceViewSet
         self.payload = {
             "id": 2,
-            "recommendation": "Fix (The risk is eradicated)",
-            "decision": "Accept (The risk is acknowledged, yet remains)",
+            "recommendation": "F",
+            "decision": "A",
             "path": "No proof has been supplied",
             "name": "string",
             "recommendation_details": "string",
@@ -1045,8 +1047,8 @@ class RiskAcceptanceTest(BaseClass.BaseClassTest):
     def test_update_forbidden_engagement(self):
         self.payload = {
             "id": 1,
-            "recommendation": "Fix (The risk is eradicated)",
-            "decision": "Accept (The risk is acknowledged, yet remains)",
+            "recommendation": "F",
+            "decision": "A",
             "path": "No proof has been supplied",
             "name": "string",
             "recommendation_details": "string",
@@ -1116,7 +1118,7 @@ class FilesTest(DojoAPITestCase):
         # Test the creation
         for level in self.url_levels:
             length = FileUpload.objects.count()
-            with open(get_unit_tests_scans_path("acunetix") / "one_finding.xml", encoding="utf-8") as testfile:
+            with (get_unit_tests_scans_path("acunetix") / "one_finding.xml").open(encoding="utf-8") as testfile:
                 payload = {
                     "title": level,
                     "file": testfile,
@@ -1139,6 +1141,31 @@ class FilesTest(DojoAPITestCase):
         for level in self.url_levels:
             response = self.client.get(f"/api/v2/{level}/files/")
             self.assertEqual(200, response.status_code)
+
+    def test_file_with_quoted_name(self):
+        level = "findings/7"
+        with (get_unit_tests_scans_path("acunetix") / "one_finding.xml").open(encoding="utf-8") as testfile:
+            # Create a new file first
+            payload = {
+                "title": 'A file "title" with Quotes & other bad chars #broken',
+                "file": testfile,
+            }
+            response = self.client.post(f"/api/v2/{level}/files/", payload)
+            self.assertEqual(201, response.status_code, response.data)
+            file_id = response.data.get("id")
+
+        # Download the file and ensure the content is accurate
+        response = self.client.get(f"/api/v2/{level}/files/download/{file_id}/")
+        downloaded_file = b"".join(response.streaming_content).decode().replace("\\n", "\n")
+        file_data = (get_unit_tests_scans_path("acunetix") / "one_finding.xml").read_text(encoding="utf-8")
+        self.assertEqual(file_data, downloaded_file)
+        # Check the name of the file is correct
+        if (match := re.search(r'filename="?(?P<filename>[^";]+)"?', response.get("Content-Disposition"))):
+            filename = match.group("filename")
+            self.assertEqual(filename, "A file -title- with Quotes - other bad chars -broken.xml")
+        else:
+            msg = "Content-Disposition header must contain the filename parameter"
+            raise NotImplementedError(msg)
 
 
 class FindingsTest(BaseClass.BaseClassTest):
@@ -1253,6 +1280,70 @@ class FindingsTest(BaseClass.BaseClassTest):
         result = self.client.patch(self.url + "2/", data={"severity": "Not a valid choice"})
         self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST, "Severity just got set to something invalid")
         self.assertEqual(result.json()["severity"], ["Severity must be one of the following: ['Info', 'Low', 'Medium', 'High', 'Critical']"])
+
+    # See https://github.com/DefectDojo/django-DefectDojo/issues/8264
+    # Capturing current behavior which might not be the desired one yet
+    def test_cvss3_validation(self):
+        with self.subTest(i=0):
+            self.assertEqual(None, Finding.objects.get(id=2).cvssv3)
+            result = self.client.patch(self.url + "2/", data={"cvssv3": "CVSS:3.0/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H", "cvssv3_score": 3})
+            self.assertEqual(result.status_code, status.HTTP_200_OK)
+            finding = Finding.objects.get(id=2)
+            self.assertEqual("CVSS:3.0/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H", finding.cvssv3)
+            self.assertEqual(8.8, finding.cvssv3_score)
+
+        with self.subTest(i=1):
+            # extra slash makes it invalid
+            result = self.client.patch(self.url + "3/", data={"cvssv3": "CVSS:3.0/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H/", "cvssv3_score": 3})
+            self.assertEqual(result.status_code, status.HTTP_200_OK)
+            finding = Finding.objects.get(id=3)
+            self.assertEqual("CVSS:3.0/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H/", finding.cvssv3)
+            self.assertEqual(3, finding.cvssv3_score)
+
+        with self.subTest(i=2):
+            # no CVSS version prefix makes it invalid
+            result = self.client.patch(self.url + "3/", data={"cvssv3": "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H", "cvssv3_score": 4})
+            self.assertEqual(result.status_code, status.HTTP_200_OK)
+            finding = Finding.objects.get(id=3)
+            self.assertEqual("AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H", finding.cvssv3)
+            # invalid vector, so no calculated score
+            self.assertEqual(4, finding.cvssv3_score)
+
+        with self.subTest(i=3):
+            # CVSS4 version makes it invalid
+            result = self.client.patch(self.url + "3/", data={"cvssv3": "CVSS:4.0/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H", "cvssv3_score": 5})
+            self.assertEqual(result.status_code, status.HTTP_200_OK)
+            finding = Finding.objects.get(id=3)
+            self.assertEqual("CVSS:4.0/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H", finding.cvssv3)
+            # invalid vector, so no calculated score
+            self.assertEqual(5, finding.cvssv3_score)
+
+        with self.subTest(i=4):
+            # CVSS2 style vector makes not supported
+            result = self.client.patch(self.url + "3/", data={"cvssv3": "AV:N/AC:L/Au:N/C:P/I:P/A:P", "cvssv3_score": 6})
+            self.assertEqual(result.status_code, status.HTTP_200_OK)
+            finding = Finding.objects.get(id=3)
+            self.assertEqual("AV:N/AC:L/Au:N/C:P/I:P/A:P", finding.cvssv3)
+            # invalid vector, so no calculated score
+            self.assertEqual(6, finding.cvssv3_score)
+
+        with self.subTest(i=5):
+            # CVSS2 prefix makes it invalid
+            result = self.client.patch(self.url + "3/", data={"cvssv3": "CVSS:2.0/AV:N/AC:L/Au:N/C:P/I:P/A:P", "cvssv3_score": 7})
+            self.assertEqual(result.status_code, status.HTTP_200_OK)
+            finding = Finding.objects.get(id=3)
+            self.assertEqual("CVSS:2.0/AV:N/AC:L/Au:N/C:P/I:P/A:P", finding.cvssv3)
+            # invalid vector, so no calculated score
+            self.assertEqual(7, finding.cvssv3_score)
+
+        with self.subTest(i=6):
+            # try to put rubbish in there
+            result = self.client.patch(self.url + "4/", data={"cvssv3": "happy little vector", "cvssv3_score": 3})
+            self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+            finding = Finding.objects.get(id=4)
+            self.assertEqual(None, finding.cvssv3)
+            # invalid request, so no score at all
+            self.assertEqual(None, finding.cvssv3_score)
 
 
 class FindingMetadataTest(BaseClass.BaseClassTest):
@@ -1795,7 +1886,7 @@ class ImportScanTest(BaseClass.BaseClassTest):
         self.viewname = "importscan"
         self.viewset = ImportScanView
 
-        testfile = open("tests/zap_sample.xml", encoding="utf-8")
+        testfile = Path("tests/zap_sample.xml").open(encoding="utf-8")
         self.payload = {
             "minimum_severity": "Low",
             "active": False,
@@ -1822,7 +1913,7 @@ class ImportScanTest(BaseClass.BaseClassTest):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -1852,7 +1943,7 @@ class ImportScanTest(BaseClass.BaseClassTest):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -1883,7 +1974,7 @@ class ImportScanTest(BaseClass.BaseClassTest):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -1915,7 +2006,7 @@ class ImportScanTest(BaseClass.BaseClassTest):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -1947,7 +2038,7 @@ class ImportScanTest(BaseClass.BaseClassTest):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -1982,7 +2073,7 @@ class ImportScanTest(BaseClass.BaseClassTest):
         mock.return_value = True
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -2014,7 +2105,7 @@ class ImportScanTest(BaseClass.BaseClassTest):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -2056,7 +2147,7 @@ class ReimportScanTest(DojoAPITestCase):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             length = Test.objects.all().count()
             response = self.client.post(
                 reverse("reimportscan-list"), {
@@ -2082,7 +2173,7 @@ class ReimportScanTest(DojoAPITestCase):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -2112,7 +2203,7 @@ class ReimportScanTest(DojoAPITestCase):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -2143,7 +2234,7 @@ class ReimportScanTest(DojoAPITestCase):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -2179,7 +2270,7 @@ class ReimportScanTest(DojoAPITestCase):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -2211,7 +2302,7 @@ class ReimportScanTest(DojoAPITestCase):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -2242,7 +2333,7 @@ class ReimportScanTest(DojoAPITestCase):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                     "minimum_severity": "Low",
                     "active": True,
@@ -2270,7 +2361,7 @@ class ReimportScanTest(DojoAPITestCase):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -2301,7 +2392,7 @@ class ReimportScanTest(DojoAPITestCase):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -2333,7 +2424,7 @@ class ReimportScanTest(DojoAPITestCase):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -2364,7 +2455,7 @@ class ReimportScanTest(DojoAPITestCase):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -2392,7 +2483,7 @@ class ReimportScanTest(DojoAPITestCase):
         importer_mock.return_value = IMPORTER_MOCK_RETURN_VALUE
         reimporter_mock.return_value = REIMPORTER_MOCK_RETURN_VALUE
 
-        with open("tests/zap_sample.xml", encoding="utf-8") as testfile:
+        with Path("tests/zap_sample.xml").open(encoding="utf-8") as testfile:
             payload = {
                 "minimum_severity": "Low",
                 "active": False,
@@ -2726,7 +2817,7 @@ class ImportLanguagesTest(BaseClass.BaseClassTest):
         self.viewset = ImportLanguagesView
         self.payload = {
             "product": 1,
-            "file": open("unittests/files/defectdojo_cloc.json", encoding="utf-8"),
+            "file": Path("unittests/files/defectdojo_cloc.json").open(encoding="utf-8"),
         }
         self.test_type = TestType.OBJECT_PERMISSIONS
         self.permission_check_class = Languages

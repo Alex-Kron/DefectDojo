@@ -1,7 +1,7 @@
 import logging
 
 from django.core.files.uploadedfile import TemporaryUploadedFile
-from django.core.serializers import deserialize, serialize
+from django.core.serializers import serialize
 from django.db.models.query_utils import Q
 
 import dojo.finding.helper as finding_helper
@@ -90,14 +90,14 @@ class DefaultReImporter(BaseImporter, DefaultReImporterOptions):
         parser = self.get_parser()
         # Get the findings from the parser based on what methods the parser supplies
         # This could either mean traditional file parsing, or API pull parsing
-        self.parsed_findings = self.parse_findings(scan, parser)
+        parsed_findings = self.parse_findings(scan, parser)
         # process the findings in the foreground or background
         (
             new_findings,
             reactivated_findings,
             findings_to_mitigate,
             untouched_findings,
-        ) = self.determine_process_method(self.parsed_findings, **kwargs)
+        ) = self.determine_process_method(parsed_findings, **kwargs)
         # Close any old findings in the processed list if the the user specified for that
         # to occur in the form that is then passed to the kwargs
         closed_findings = self.close_old_findings(findings_to_mitigate, **kwargs)
@@ -263,6 +263,15 @@ class DefaultReImporter(BaseImporter, DefaultReImporterOptions):
         # Determine if pushing to jira or if the finding groups are enabled
         mitigated_findings = []
         for finding in findings:
+            # Get any status changes that could have occurred earlier in the process
+            # for special statuses only.
+            # An example of such is a finding being reported as false positive, and
+            # reimport makes this change in the database. However, the findings here
+            # are calculated based from the original values before the reimport, so
+            # any updates made during reimport are discarded without first getting the
+            # state of the finding as it stands at this moment
+            finding.refresh_from_db(fields=["false_p", "risk_accepted", "out_of_scope"])
+            # Ensure the finding is not already closed
             if not finding.mitigated or not finding.is_mitigated:
                 logger.debug("mitigating finding: %i:%s", finding.id, finding)
                 self.mitigate_finding(
@@ -277,24 +286,6 @@ class DefaultReImporter(BaseImporter, DefaultReImporterOptions):
                 jira_helper.push_to_jira(finding_group)
 
         return mitigated_findings
-
-    def parse_findings(
-        self,
-        scan: TemporaryUploadedFile,
-        parser: Parser,
-    ) -> list[Finding]:
-        """
-        Determine how to parse the findings based on the presence of the
-        `get_tests` function on the parser object
-        """
-        # Attempt any preprocessing before generating findings
-        if len(self.parsed_findings) == 0 or self.test is None:
-            scan = self.process_scan_file(scan)
-            if hasattr(parser, "get_tests"):
-                self.parsed_findings = self.parse_findings_dynamic_test_type(scan, parser)
-            else:
-                self.parsed_findings = self.parse_findings_static_test_type(scan, parser)
-        return self.parsed_findings
 
     def parse_findings_static_test_type(
         self,
@@ -321,62 +312,6 @@ class DefaultReImporter(BaseImporter, DefaultReImporterOptions):
         """
         logger.debug("REIMPORT_SCAN parser v2: Create parse findings")
         return super().parse_findings_dynamic_test_type(scan, parser)
-
-    def async_process_findings(
-        self,
-        parsed_findings: list[Finding],
-        **kwargs: dict,
-    ) -> tuple[list[Finding], list[Finding], list[Finding], list[Finding]]:
-        """
-        Processes findings in chunks within N number of processes. The
-        ASYNC_FINDING_IMPORT_CHUNK_SIZE setting will determine how many
-        findings will be processed in a given worker/process/thread
-        """
-        # Indicate that the test is not complete yet as endpoints will still be rolling in.
-        self.update_test_progress(percentage_value=50)
-        chunk_list = self.chunk_findings(parsed_findings)
-        results_list = []
-        new_findings = []
-        reactivated_findings = []
-        findings_to_mitigate = []
-        untouched_findings = []
-        # First kick off all the workers
-        for findings_list in chunk_list:
-            result = self.process_findings(
-                findings_list,
-                sync=False,
-                **kwargs,
-            )
-            # Since I dont want to wait until the task is done right now, save the id
-            # So I can check on the task later
-            results_list += [result]
-        # After all tasks have been started, time to pull the results
-        logger.debug("REIMPORT_SCAN: Collecting Findings")
-        for results in results_list:
-            (
-                serial_new_findings,
-                serial_reactivated_findings,
-                serial_findings_to_mitigate,
-                serial_untouched_findings,
-            ) = results
-            new_findings += [
-                next(deserialize("json", finding)).object
-                for finding in serial_new_findings
-            ]
-            reactivated_findings += [
-                next(deserialize("json", finding)).object
-                for finding in serial_reactivated_findings
-            ]
-            findings_to_mitigate += [
-                next(deserialize("json", finding)).object
-                for finding in serial_findings_to_mitigate
-            ]
-            untouched_findings += [
-                next(deserialize("json", finding)).object
-                for finding in serial_untouched_findings
-            ]
-            logger.debug("REIMPORT_SCAN: All Findings Collected")
-        return new_findings, reactivated_findings, findings_to_mitigate, untouched_findings
 
     def match_new_finding_to_existing_finding(
         self,
@@ -411,7 +346,7 @@ class DefaultReImporter(BaseImporter, DefaultReImporterOptions):
             # If you have use cases going through this section, you're advised to create a deduplication configuration for your parser
             logger.warning("Legacy reimport. In case of issue, you're advised to create a deduplication configuration in order not to go through this section")
             return Finding.objects.filter(
-                    title=unsaved_finding.title,
+                    title__iexact=unsaved_finding.title,
                     test=self.test,
                     severity=unsaved_finding.severity,
                     numerical_severity=Finding.get_numerical_severity(unsaved_finding.severity)).order_by("id")

@@ -25,6 +25,7 @@ from dateutil.relativedelta import MO, SU, relativedelta
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Case, Count, IntegerField, Q, Sum, Value, When
 from django.db.models.query import QuerySet
@@ -219,7 +220,7 @@ def match_finding_to_existing_findings(finding, product=None, engagement=None, t
         return (
             Finding.objects.filter(
                 **custom_filter,
-                title=finding.title,
+                title__iexact=finding.title,
                 severity=finding.severity,
                 numerical_severity=Finding.get_numerical_severity(finding.severity),
             ).order_by("id")
@@ -235,10 +236,7 @@ def is_deduplication_on_engagement_mismatch(new_finding, to_duplicate_finding):
 
 
 def get_endpoints_as_url(finding):
-    list1 = []
-    for e in finding.endpoints.all():
-        list1.append(hyperlink.parse(str(e)))
-    return list1
+    return [hyperlink.parse(str(e)) for e in finding.endpoints.all()]
 
 
 def are_urls_equal(url1, url2, fields):
@@ -893,9 +891,7 @@ def get_punchcard_data(objs, start_date, weeks, view="Finding"):
 
 
 def get_week_data(week_start_date, tick, day_counts):
-    data = []
-    for i in range(len(day_counts)):
-        data.append([tick, i, day_counts[i]])
+    data = [[tick, i, day_counts[i]] for i in range(len(day_counts))]
     label = [tick, week_start_date.strftime("<span class='small'>%m/%d<br/>%Y</span>")]
     return data, label
 
@@ -1377,23 +1373,24 @@ def handle_uploaded_threat(f, eng):
     path = Path(f.name)
     extension = path.suffix
     # Check if threat folder exist.
-    if not Path(settings.MEDIA_ROOT + "/threat/").is_dir():
+    threat_dir = Path(settings.MEDIA_ROOT) / "threat"
+    if not threat_dir.is_dir():
         # Create the folder
-        Path(settings.MEDIA_ROOT + "/threat/").mkdir()
-    with open(settings.MEDIA_ROOT + f"/threat/{eng.id}{extension}",
-              "wb+") as destination:
+        threat_dir.mkdir()
+    eng_path = threat_dir / f"{eng.id}{extension}"
+    with eng_path.open("wb+") as destination:
         destination.writelines(chunk for chunk in f.chunks())
-    eng.tmodel_path = settings.MEDIA_ROOT + f"/threat/{eng.id}{extension}"
+    eng.tmodel_path = str(eng_path)
     eng.save()
 
 
 def handle_uploaded_selenium(f, cred):
     path = Path(f.name)
     extension = path.suffix
-    with open(settings.MEDIA_ROOT + f"/selenium/{cred.id}{extension}",
-              "wb+") as destination:
+    sel_path = Path(settings.MEDIA_ROOT) / "selenium" / f"{cred.id}{extension}"
+    with sel_path.open("wb+") as destination:
         destination.writelines(chunk for chunk in f.chunks())
-    cred.selenium_script = settings.MEDIA_ROOT + f"/selenium/{cred.id}{extension}"
+    cred.selenium_script = str(sel_path)
     cred.save()
 
 
@@ -1620,35 +1617,6 @@ def get_celery_worker_status():
         return res.get(timeout=5)
     except:
         return False
-
-
-def get_work_days(start: date, end: date):
-    """
-    Math function to get workdays between 2 dates.
-    Can be used only as fallback as it doesn't know
-    about specific country holidays or extra working days.
-    https://stackoverflow.com/questions/3615375/number-of-days-between-2-dates-excluding-weekends/71977946#71977946
-    """
-    # if the start date is on a weekend, forward the date to next Monday
-    if start.weekday() > WEEKDAY_FRIDAY:
-        start += timedelta(days=7 - start.weekday())
-
-    # if the end date is on a weekend, rewind the date to the previous Friday
-    if end.weekday() > WEEKDAY_FRIDAY:
-        end -= timedelta(days=end.weekday() - WEEKDAY_FRIDAY)
-
-    if start > end:
-        return 0
-    # that makes the difference easy, no remainders etc
-    diff_days = (end - start).days + 1
-    weeks = int(diff_days / 7)
-
-    remainder = end.weekday() - start.weekday() + 1
-
-    if remainder != 0 and end.weekday() < start.weekday():
-        remainder += 5
-
-    return weeks * 5 + remainder
 
 
 # Used to display the counts and enabled tabs in the product view
@@ -1936,9 +1904,9 @@ def sla_compute_and_notify(*args, **kwargs):
         return title
 
     def _create_notifications():
-        for pt in combined_notifications:
-            for p in combined_notifications[pt]:
-                for kind in combined_notifications[pt][p]:
+        for prodtype, comb_notif_prodtype in combined_notifications.items():
+            for prod, comb_notif_prod in comb_notif_prodtype.items():
+                for kind, comb_notif_kind in comb_notif_prod.items():
                     # creating notifications on per-finding basis
 
                     # we need this list for combined notification feature as we
@@ -1946,7 +1914,7 @@ def sla_compute_and_notify(*args, **kwargs):
                     # create_notification() arguments
                     findings_list = []
 
-                    for n in combined_notifications[pt][p][kind]:
+                    for n in comb_notif_kind:
                         title = _notification_title_for_finding(n.finding, kind, n.finding.sla_days_remaining())
 
                         create_notification(
@@ -1963,8 +1931,8 @@ def sla_compute_and_notify(*args, **kwargs):
                         findings_list.append(n.finding)
 
                     # producing a "combined" SLA breach notification
-                    title_combined = f"SLA alert ({kind}): product type '{pt}', product '{p}'"
-                    product = combined_notifications[pt][p][kind][0].finding.test.engagement.product
+                    title_combined = f"SLA alert ({kind}): product type '{prodtype}', product '{prod}'"
+                    product = comb_notif_kind[0].finding.test.engagement.product
                     create_notification(
                         event="sla_breach_combined",
                         title=title_combined,
@@ -2203,7 +2171,7 @@ def add_error_message_to_response(message):
 
 def add_field_errors_to_response(form):
     if form and get_current_request():
-        for field, error in form.errors.items():
+        for error in form.errors.values():
             add_error_message_to_response(error)
 
 
@@ -2240,22 +2208,18 @@ def mass_model_updater(model_type, models, function, fields, page_size=1000, ord
     i = 0
     batch = []
     total_pages = (total_count // page_size) + 2
-    # logger.info('pages to process: %d', total_pages)
+    # logger.debug("pages to process: %d", total_pages)
     logger.debug("%s%s out of %s models processed ...", log_prefix, i, total_count)
-    for p in range(1, total_pages):
-        # logger.info('page: %d', p)
+    for _p in range(1, total_pages):
         if order == "asc":
             page = models.filter(id__gt=last_id)[:page_size]
         else:
             page = models.filter(id__lt=last_id)[:page_size]
 
-        # logger.info('page query: %s', page.query)
-        # if p == 23:
-        #     raise ValueError('bla')
+        logger.debug("page query: %s", page.query)
         for model in page:
             i += 1
             last_id = model.id
-            # logger.info('last_id: %s', last_id)
 
             function(model)
 
@@ -2330,9 +2294,7 @@ def get_file_images(obj, *, return_objects=False):
 def get_enabled_notifications_list():
     # Alerts need to enabled by default
     enabled = ["alert"]
-    for choice in NOTIFICATION_CHOICES:
-        if get_system_setting(f"enable_{choice[0]}_notifications"):
-            enabled.append(choice[0])
+    enabled.extend(choice[0] for choice in NOTIFICATION_CHOICES if get_system_setting(f"enable_{choice[0]}_notifications"))
     return enabled
 
 
@@ -2481,26 +2443,17 @@ def calculate_finding_age(f):
     if start_date and isinstance(start_date, str):
         start_date = parse(start_date).date()
 
-    if settings.SLA_BUSINESS_DAYS:
-        if f.get("mitigated"):
-            mitigated_date = f.get("mitigated")
-            if isinstance(mitigated_date, datetime):
-                mitigated_date = f.get("mitigated").date()
-            days = get_work_days(f.get("date"), mitigated_date)
-        else:
-            days = get_work_days(f.get("date"), timezone.now().date())
-    else:
-        if isinstance(start_date, datetime):
-            start_date = start_date.date()
+    if isinstance(start_date, datetime):
+        start_date = start_date.date()
 
-        if f.get("mitigated"):
-            mitigated_date = f.get("mitigated")
-            if isinstance(mitigated_date, datetime):
-                mitigated_date = f.get("mitigated").date()
-            diff = mitigated_date - start_date
-        else:
-            diff = timezone.now().date() - start_date
-        days = diff.days
+    if f.get("mitigated"):
+        mitigated_date = f.get("mitigated")
+        if isinstance(mitigated_date, datetime):
+            mitigated_date = f.get("mitigated").date()
+        diff = mitigated_date - start_date
+    else:
+        diff = timezone.now().date() - start_date
+    days = diff.days
     return max(0, days)
 
 
@@ -2624,10 +2577,8 @@ def get_open_findings_burndown(product):
                         info_count -= 1
 
         f_day = [critical_count, high_count, medium_count, low_count, info_count]
-        if min(f_day) < running_min:
-            running_min = min(f_day)
-        if max(f_day) > running_max:
-            running_max = max(f_day)
+        running_min = min(running_min, *f_day)
+        running_max = max(running_max, *f_day)
 
         past_90_days["Critical"].append([d_start * 1000, critical_count])
         past_90_days["High"].append([d_start * 1000, high_count])
@@ -2671,9 +2622,11 @@ def generate_file_response(file_object: FileUpload) -> FileResponse:
         raise TypeError(msg)
     # Determine the path of the file on disk within the MEDIA_ROOT
     file_path = f"{settings.MEDIA_ROOT}/{file_object.file.url.lstrip(settings.MEDIA_URL)}"
+    # Clean the title by removing some problematic characters
+    cleaned_file_name = re.sub(r'[<>:"/\\|?*`=\'&%#;]', "-", file_object.title)
 
     return generate_file_response_from_file_path(
-        file_path, file_name=file_object.title, file_size=file_object.file.size,
+        file_path, file_name=cleaned_file_name, file_size=file_object.file.size,
     )
 
 
@@ -2694,7 +2647,7 @@ def generate_file_response_from_file_path(
     # Generate the FileResponse
     full_file_name = f"{file_name}{file_extension}"
     response = FileResponse(
-        open(file_path, "rb"),
+        path.open("rb"),
         filename=full_file_name,
         content_type=f"{mimetypes.guess_type(file_path)}",
     )
@@ -2702,3 +2655,20 @@ def generate_file_response_from_file_path(
     response["Content-Disposition"] = f'attachment; filename="{full_file_name}"'
     response["Content-Length"] = file_size
     return response
+
+
+def tag_validator(value: str | list[str], exception_class: Callable = ValidationError) -> None:
+    TAG_PATTERN = re.compile(r'[ ,\'"]')
+    error_messages = []
+
+    if isinstance(value, list):
+        error_messages.extend(f"Invalid tag: '{tag}'. Tags should not contain spaces, commas, or quotes." for tag in value if TAG_PATTERN.search(tag))
+    elif isinstance(value, str):
+        if TAG_PATTERN.search(value):
+            error_messages.append(f"Invalid tag: '{value}'. Tags should not contain spaces, commas, or quotes.")
+    else:
+        error_messages.append(f"Value must be a string or list of strings: {value} - {type(value)}.")
+
+    if error_messages:
+        logger.debug(f"Tag validation failed: {error_messages}")
+        raise exception_class(error_messages)

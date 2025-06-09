@@ -2,6 +2,7 @@ import datetime
 
 # from unittest import skip
 import logging
+from pathlib import Path
 
 from django.test import override_settings
 from django.test.client import Client
@@ -100,6 +101,10 @@ class ImportReimportMixin:
 
         self.anchore_grype_file_name = get_unit_tests_scans_path("anchore_grype") / "check_all_fields.json"
         self.anchore_grype_scan_type = "Anchore Grype"
+
+        self.checkmarx_one_open_and_false_positive = get_unit_tests_scans_path("checkmarx_one") / "one-open-one-false-positive.json"
+        self.checkmarx_one_two_false_positive = get_unit_tests_scans_path("checkmarx_one") / "two-false-positive.json"
+        self.scan_type_checkmarx_one = "Checkmarx One Scan"
 
     # import zap scan, testing:
     # - import
@@ -366,7 +371,7 @@ class ImportReimportMixin:
         logger.debug("reimporting exact same original veracode mitigated xml report again")
 
         import_veracode_many_findings = self.import_scan_with_params(self.veracode_mitigated_findings, scan_type=self.scan_type_veracode,
-                                                                     verified=True, forceActive=True, forceVerified=True)
+                                                                     verified=True, force_active=True, force_verified=True)
 
         test_id = import_veracode_many_findings["test"]
 
@@ -1480,6 +1485,23 @@ class ImportReimportMixin:
         test = Test.objects.get(id=test_id)
         self.assertFalse(test.test_type.dynamically_generated)
 
+    def test_false_positive_status_applied_after_reimport(self):
+        # Test that checkmarx one with a file that has one open finding, and one false positive finding
+        import0 = self.import_scan_with_params(self.checkmarx_one_open_and_false_positive, scan_type=self.scan_type_checkmarx_one, active=None, verified=None)
+        test_id = import0["test"]
+        active_finding_before = self.get_test_findings_api(test_id, active=True)
+        false_p_finding_before = self.get_test_findings_api(test_id, false_p=True)
+        # Make sure we get the expeceted results
+        self.assertEqual(1, active_finding_before.get("count", 0))
+        self.assertEqual(1, false_p_finding_before.get("count", 0))
+        # reimport the next report that sets the active finding to false positive
+        self.reimport_scan_with_params(test_id, self.checkmarx_one_two_false_positive, scan_type=self.scan_type_checkmarx_one)
+        active_finding_after = self.get_test_findings_api(test_id, active=True)
+        false_p_finding_after = self.get_test_findings_api(test_id, false_p=True)
+        # Make sure we get the expeceted results
+        self.assertEqual(0, active_finding_after.get("count", 0))
+        self.assertEqual(2, false_p_finding_after.get("count", 0))
+
 
 class ImportReimportTestAPI(DojoAPITestCase, ImportReimportMixin):
     fixtures = ["dojo_testdata.json"]
@@ -1553,7 +1575,7 @@ class ImportReimportTestAPI(DojoAPITestCase, ImportReimportMixin):
                     "low": {"active": 1, "duplicate": 0, "false_p": 0, "is_mitigated": 0, "out_of_scope": 0, "risk_accepted": 0, "total": 1, "verified": 0},
                     "medium": {"active": 0, "duplicate": 0, "false_p": 0, "is_mitigated": 0, "out_of_scope": 0, "risk_accepted": 0, "total": 0, "verified": 0},
                     "total": {"active": 1, "duplicate": 0, "false_p": 0, "is_mitigated": 0, "out_of_scope": 0, "risk_accepted": 0, "total": 1, "verified": 0}},
-                "left untouched": {
+                "untouched": {
                     "critical": {"active": 0, "duplicate": 0, "false_p": 0, "is_mitigated": 0, "out_of_scope": 0, "risk_accepted": 0, "total": 0, "verified": 0},
                     "high": {"active": 0, "duplicate": 0, "false_p": 0, "is_mitigated": 0, "out_of_scope": 0, "risk_accepted": 0, "total": 0, "verified": 0},
                     "info": {"active": 0, "duplicate": 0, "false_p": 0, "is_mitigated": 0, "out_of_scope": 0, "risk_accepted": 0, "total": 0, "verified": 0},
@@ -1603,7 +1625,7 @@ class ImportReimportTestAPI(DojoAPITestCase, ImportReimportMixin):
                     "low": {"active": 0, "duplicate": 0, "false_p": 0, "is_mitigated": 0, "out_of_scope": 0, "risk_accepted": 0, "total": 0, "verified": 0},
                     "medium": {"active": 0, "duplicate": 0, "false_p": 0, "is_mitigated": 0, "out_of_scope": 0, "risk_accepted": 0, "total": 0, "verified": 0},
                     "total": {"active": 0, "duplicate": 0, "false_p": 0, "is_mitigated": 0, "out_of_scope": 0, "risk_accepted": 0, "total": 0, "verified": 0}},
-                "left untouched": {
+                "untouched": {
                     "critical": {"active": 0, "duplicate": 0, "false_p": 0, "is_mitigated": 0, "out_of_scope": 0, "risk_accepted": 0, "total": 0, "verified": 0},
                     "high": {"active": 0, "duplicate": 0, "false_p": 0, "is_mitigated": 0, "out_of_scope": 0, "risk_accepted": 0, "total": 0, "verified": 0},
                     "info": {"active": 0, "duplicate": 0, "false_p": 0, "is_mitigated": 0, "out_of_scope": 0, "risk_accepted": 0, "total": 0, "verified": 0},
@@ -1794,7 +1816,7 @@ class ImportReimportTestUI(DojoAPITestCase, ImportReimportMixin):
         response = self.client_ui.post(reverse("import_scan_results", args=(engagement, )), payload)
 
         test = Test.objects.get(id=response.url.split("/")[-1])
-        # f = open('response.html', 'w+')
+        # f = Path('response.html').open('w+')
         # f.write(str(response.content, 'utf-8'))
         # f.close()
         self.assertEqual(302, response.status_code, response.content[:1000])
@@ -1808,21 +1830,21 @@ class ImportReimportTestUI(DojoAPITestCase, ImportReimportMixin):
 
     def import_scan_with_params_ui(self, filename, scan_type="ZAP Scan", engagement=1, minimum_severity="Low", *, active=True, verified=False,
                                    push_to_jira=None, endpoint_to_add=None, tags=None, close_old_findings=False, scan_date=None, service=None,
-                                   forceActive=False, forceVerified=False):
+                                   force_active=False, force_verified=False):
 
         activePayload = "not_specified"
-        if forceActive:
+        if force_active:
             activePayload = "force_to_true"
-        elif not active:
+        elif active is False:
             activePayload = "force_to_false"
 
         verifiedPayload = "not_specified"
-        if forceVerified:
+        if force_verified:
             verifiedPayload = "force_to_true"
-        elif not verified:
+        elif verified is False:
             verifiedPayload = "force_to_false"
 
-        with open(filename, encoding="utf-8") as testfile:
+        with Path(filename).open(encoding="utf-8") as testfile:
             payload = {
                     "minimum_severity": minimum_severity,
                     "active": activePayload,
@@ -1860,7 +1882,7 @@ class ImportReimportTestUI(DojoAPITestCase, ImportReimportMixin):
         if not verified:
             verifiedPayload = "force_to_false"
 
-        with open(filename, encoding="utf-8") as testfile:
+        with Path(filename).open(encoding="utf-8") as testfile:
             payload = {
                     "minimum_severity": minimum_severity,
                     "active": activePayload,

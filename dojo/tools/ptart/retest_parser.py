@@ -20,6 +20,7 @@ class PTARTRetestParser:
         self.cvss_type = None
 
     def get_test_data(self, tree):
+        self.cvss_type = None
         if "retests" in tree:
             self.cvss_type = tree.get("cvss_type", None)
             retests = tree["retests"]
@@ -90,6 +91,8 @@ class PTARTRetestParser:
 
         if "labels" in original_hit:
             finding.unsaved_tags = original_hit["labels"]
+
+        finding.cwe = ptart_tools.parse_cwe_from_hit(original_hit)
 
         finding.unsaved_endpoints = ptart_tools.parse_endpoints_from_hit(
             original_hit,
